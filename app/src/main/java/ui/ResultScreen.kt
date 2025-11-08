@@ -80,13 +80,15 @@ fun ResultScreen(
         createPinBitmap(context, "#FF9800") // 주황색 (선택된 장소)
     }
 
-    // 🔹 LaunchedEffect로 마커 동적 업데이트 (Capstone-Backup 방식)
+    // 🔹 LaunchedEffect로 마커 + 경로 동적 업데이트 (Capstone-Backup 방식 - 단일 Effect)
     LaunchedEffect(kakaoMap, selectedOrder.toList(), rec.places, showRealRoute, routeSegments) {
         val map = kakaoMap ?: return@LaunchedEffect
         val labelManager = map.labelManager ?: return@LaunchedEffect
+        val routeLineManager = map.routeLineManager ?: return@LaunchedEffect
 
-        // 기존 마커 모두 제거
+        // 기존 마커 및 경로선 모두 제거
         labelManager.layer?.removeAll()
+        routeLineManager.layer?.removeAll()
         labelPlaceMap.clear()
 
         Log.d("UI", "LaunchedEffect: Adding ${rec.places.size} markers")
@@ -146,6 +148,46 @@ fun ResultScreen(
         }
 
         Log.d("UI", "✅ Markers added: ${labelPlaceMap.size}")
+
+        // 🔹 실제 경로 표시 (같은 LaunchedEffect 내에서 처리)
+        if (showRealRoute && routeSegments.isNotEmpty()) {
+            try {
+                // 각 구간을 다른 색상으로 표시
+                val colors = listOf(
+                    Color.rgb(66, 133, 244),   // 파란색
+                    Color.rgb(234, 67, 53),    // 빨간색
+                    Color.rgb(251, 188, 5),    // 노란색
+                    Color.rgb(52, 168, 83),    // 초록색
+                    Color.rgb(156, 39, 176),   // 보라색
+                    Color.rgb(255, 109, 0),    // 주황색
+                )
+
+                routeSegments.forEachIndexed { index, segment ->
+                    val coords = segment.pathCoordinates
+                    if (coords.size >= 2) {
+                        val color = colors[index % colors.size]
+
+                        val options = RouteLineOptions.from(
+                            RouteLineSegment.from(coords)
+                                .setStyles(
+                                    RouteLineStyles.from(
+                                        RouteLineStyle.from(18f, color)
+                                    )
+                                )
+                        )
+
+                        val routeLine = routeLineManager.layer?.addRouteLine(options)
+                        routeLine?.show()
+
+                        Log.d("UI", "경로 ${index + 1}: ${coords.size}개 좌표, 색상=${String.format("#%06X", color and 0xFFFFFF)}")
+                    }
+                }
+
+                Log.d("UI", "✅ 경로선 그리기 완료: ${routeSegments.size}개 구간")
+            } catch (e: Exception) {
+                Log.e("UI", "❌ 경로선 그리기 실패: ${e.message}", e)
+            }
+        }
     }
 
     val focusOn: (Place) -> Unit = { p ->
@@ -192,64 +234,6 @@ fun ResultScreen(
             } finally {
                 isLoadingRoute = false
             }
-        }
-    }
-
-    // 🔹 지도에 경로선 그리기 (LaunchedEffect로 routeSegments 변경 감지)
-    LaunchedEffect(showRealRoute, routeSegments) {
-        val map = kakaoMap ?: return@LaunchedEffect
-
-        if (!showRealRoute || routeSegments.isEmpty()) {
-            clearRoutePolyline(map)
-            return@LaunchedEffect
-        }
-
-        try {
-            val routeManager = map.routeLineManager ?: return@LaunchedEffect
-            val layer = routeManager.layer ?: return@LaunchedEffect
-
-            // 기존 경로 제거
-            layer.removeAll()
-
-            // 각 구간을 다른 색상으로 표시
-            val colors = listOf(
-                Color.rgb(66, 133, 244),   // 파란색
-                Color.rgb(234, 67, 53),    // 빨간색
-                Color.rgb(251, 188, 5),    // 노란색
-                Color.rgb(52, 168, 83),    // 초록색
-                Color.rgb(156, 39, 176),   // 보라색
-                Color.rgb(255, 109, 0),    // 주황색
-            )
-
-            routeSegments.forEachIndexed { index, segment ->
-                val coords = segment.pathCoordinates
-                if (coords.size >= 2) {
-                    val color = colors[index % colors.size]
-
-                    val options = RouteLineOptions.from(
-                        RouteLineSegment.from(coords)
-                            .setStyles(
-                                RouteLineStyles.from(
-                                    RouteLineStyle.from(18f, color)
-                                )
-                            )
-                    )
-
-                    val routeLine = layer.addRouteLine(options)
-                    routeLine?.show()
-
-                    Log.d("UI", "경로 ${index + 1}: ${coords.size}개 좌표, 색상=${String.format("#%06X", color and 0xFFFFFF)}")
-                }
-            }
-
-            // 시작점과 끝점에 특수 마커 추가
-            if (selectedPlaces.isNotEmpty()) {
-                addStartEndMarkers(map, selectedPlaces.first(), selectedPlaces.last())
-            }
-
-            Log.d("UI", "✅ 경로선 그리기 완료")
-        } catch (e: Exception) {
-            Log.e("UI", "❌ 경로선 그리기 실패: ${e.message}", e)
         }
     }
 
@@ -387,9 +371,9 @@ fun ResultScreen(
                 OutlinedButton(
                     onClick = {
                         selectedOrder.clear()
-                        kakaoMap?.let { clearRoutePolyline(it) }
                         routeSegments = emptyList()
                         showRealRoute = false
+                        // LaunchedEffect가 자동으로 마커 및 경로 업데이트
                     },
                     modifier = Modifier.weight(1f)
                 ) { Text("선택 초기화") }
