@@ -89,12 +89,15 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
 
-    // Navigation
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    // Material Icons Extended (for MyLocation icon)
+    implementation("androidx.compose.material:material-icons-extended:1.7.5")
 
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+
+    // Navigation Compose (for bottom navigation bar)
+    implementation("androidx.navigation:navigation-compose:2.8.5")
 
     // Networking
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
@@ -103,6 +106,12 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
+    // Coroutines Play Services (for tasks.await())
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+
     // Kakao Map SDK
     implementation("com.kakao.maps.open:android:2.9.5")
+
+    // Google Play Services Location (for GPS location)
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 }

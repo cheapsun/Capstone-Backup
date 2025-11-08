@@ -143,6 +143,7 @@ object KakaoLocalService {
                     list += "AC5"                   // 학원/체험(보조)
                 }
                 Category.NIGHT -> list += "AD5"     // 숙박/야간활동 근접
+                Category.STAY -> list += "AD5"      // 숙박
             }
         }
         return list
