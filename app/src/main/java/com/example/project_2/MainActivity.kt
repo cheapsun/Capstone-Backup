@@ -4,24 +4,46 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.example.project_2.data.KakaoLocalService
 import com.example.project_2.data.openai.OpenAiService
 import com.example.project_2.data.weather.WeatherService
 import com.example.project_2.data.route.TmapPedestrianService
 import com.example.project_2.domain.GptRerankUseCase
-import com.example.project_2.domain.model.RecommendationResult
 import com.example.project_2.domain.repo.RealTravelRepository
 import com.example.project_2.ui.main.MainScreen
 import com.example.project_2.ui.main.MainViewModel
 import com.example.project_2.ui.result.ResultScreen
 import com.example.project_2.ui.theme.Project2Theme
 import com.kakao.vectormap.KakaoMapSdk
+
+// 🔹 하단 네비게이션 화면 정의
+sealed class Screen(val route: String, val name: String, val icon: @Composable () -> Unit) {
+    object Search : Screen("search", "검색", { Icon(Icons.Default.Home, contentDescription = null) })
+    object Map : Screen("map", "지도", { Icon(Icons.Default.Place, contentDescription = null) })
+    object Route : Screen("route", "루트", { Icon(Icons.Default.List, contentDescription = null) })
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,7 +56,7 @@ class MainActivity : ComponentActivity() {
         OpenAiService.init(BuildConfig.OPENAI_API_KEY)
         TmapPedestrianService.init(BuildConfig.TMAP_API_KEY)  // ✅ T-Map 보행자 경로 API
 
-        // ===== GPT 재랭커 + Repository =====
+        // ===== GPT 재랭커 + Repository + ViewModel =====
         val reranker = GptRerankUseCase(openAi = OpenAiService)
         val repo = RealTravelRepository(reranker)
         val mainVm = MainViewModel(repo)
@@ -44,26 +66,78 @@ class MainActivity : ComponentActivity() {
                 // ✅ 앱 시작 시 위치 권한 요청 (한 번만)
                 RequestLocationPermissions()
 
-                var mode by remember { mutableStateOf("main") }
-                var lastResult by remember { mutableStateOf<RecommendationResult?>(null) }
-                var lastRegionHint by remember { mutableStateOf<String?>(null) }
+                val navController = rememberNavController()
 
-                BackHandler(enabled = mode == "result") {
-                    mode = "main"; lastResult = null; lastRegionHint = null
-                }
+                Scaffold(
+                    bottomBar = { BottomNavBar(navController) }
+                ) { innerPadding ->
+                    NavHost(
+                        navController,
+                        startDestination = Screen.Search.route,
+                        Modifier.padding(innerPadding)
+                    ) {
+                        composable(Screen.Search.route) {
+                            MainScreen(mainVm) { rec ->
+                                // MainScreen에서 이미 lastResult 업데이트됨
+                                navController.navigate(Screen.Map.route) {
+                                    launchSingleTop = true
+                                }
+                            }
+                        }
 
-                when (mode) {
-                    "main" -> {
-                        val uiState by mainVm.ui.collectAsState()
-                        MainScreen(mainVm) { rec ->
-                            lastResult = rec
-                            lastRegionHint = uiState.filter.region.ifBlank { null }
-                            mode = "result"
+                        composable(Screen.Map.route) {
+                            val uiState by mainVm.ui.collectAsState()
+                            val recResult = uiState.lastResult
+
+                            recResult?.let { rec ->
+                                val regionHint = uiState.filter.region.ifBlank { null }
+                                ResultScreen(rec, regionHint)
+                            } ?: run {
+                                // 추천 결과가 없을 때는 검색 화면으로 유도
+                                LaunchedEffect(Unit) {
+                                    navController.navigate(Screen.Search.route) {
+                                        popUpTo(Screen.Search.route) { inclusive = true }
+                                    }
+                                }
+                            }
+                        }
+
+                        composable(Screen.Route.route) {
+                            // TODO: 루트 화면 구현 (향후 확장)
+                            Text("루트 화면 - 향후 구현 예정")
                         }
                     }
-                    "result" -> lastResult?.let { ResultScreen(it, lastRegionHint) }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 🔹 하단 네비게이션 바
+ */
+@Composable
+private fun BottomNavBar(navController: androidx.navigation.NavController) {
+    val items = listOf(Screen.Search, Screen.Map, Screen.Route)
+    NavigationBar {
+        val navBackStackEntry by navController.currentBackStackEntryAsState()
+        val currentDestination = navBackStackEntry?.destination
+
+        items.forEach { screen ->
+            NavigationBarItem(
+                icon = { screen.icon() },
+                label = { Text(screen.name) },
+                selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                onClick = {
+                    navController.navigate(screen.route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
         }
     }
 }

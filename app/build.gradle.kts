@@ -93,6 +93,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
 
+    // Navigation Compose (for bottom navigation bar)
+    implementation("androidx.navigation:navigation-compose:2.8.5")
+
     // Networking
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
