@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.net.Uri
 import android.util.Log
 import android.view.ViewGroup
@@ -32,6 +33,7 @@ import com.kakao.vectormap.label.Label
 import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
 import com.kakao.vectormap.label.LabelStyles
+import com.kakao.vectormap.label.LabelTextStyle
 import com.kakao.vectormap.route.*
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
@@ -47,8 +49,7 @@ fun ResultScreen(
     }
 
     var kakaoMap by remember { mutableStateOf<KakaoMap?>(null) }
-    val labelById = remember { mutableStateMapOf<String, Label>() }
-    val baseNameById = remember { mutableStateMapOf<String, String>() }
+    val labelPlaceMap = remember { mutableMapOf<Label, Place>() }
     var highlightedId by remember { mutableStateOf<String?>(null) }
 
     val selectedOrder = remember { mutableStateListOf<String>() }
@@ -66,29 +67,100 @@ fun ResultScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    // 🔹 커스텀 핀 비트맵 생성 (Capstone-Backup 방식)
+    val bluePinBitmap = remember {
+        createPinBitmap(context, "#4285F4") // 파란색 (일반 장소)
+    }
+
+    val starPinBitmap = remember {
+        createPinBitmap(context, "#FFD700") // 골드색 (Top Picks)
+    }
+
+    val orangePinBitmap = remember {
+        createPinBitmap(context, "#FF9800") // 주황색 (선택된 장소)
+    }
+
+    // 🔹 LaunchedEffect로 마커 동적 업데이트 (Capstone-Backup 방식)
+    LaunchedEffect(kakaoMap, selectedOrder.toList(), rec.places, showRealRoute, routeSegments) {
+        val map = kakaoMap ?: return@LaunchedEffect
+        val labelManager = map.labelManager ?: return@LaunchedEffect
+
+        // 기존 마커 모두 제거
+        labelManager.layer?.removeAll()
+        labelPlaceMap.clear()
+
+        Log.d("UI", "LaunchedEffect: Adding ${rec.places.size} markers")
+
+        // 텍스트 스타일
+        val textStyle = LabelStyles.from(
+            LabelStyle.from(LabelTextStyle.from(28, Color.BLACK, 2, Color.WHITE))
+        )
+
+        // 핀 스타일 생성
+        val bluePinStyle = if (bluePinBitmap != null) {
+            LabelStyles.from(LabelStyle.from(bluePinBitmap).setAnchorPoint(0.5f, 1.0f))
+        } else {
+            textStyle
+        }
+
+        val starPinStyle = if (starPinBitmap != null) {
+            LabelStyles.from(LabelStyle.from(starPinBitmap).setAnchorPoint(0.5f, 1.0f))
+        } else {
+            textStyle
+        }
+
+        val orangePinStyle = if (orangePinBitmap != null) {
+            LabelStyles.from(LabelStyle.from(orangePinBitmap).setAnchorPoint(0.5f, 1.0f))
+        } else {
+            textStyle
+        }
+
+        // 모든 추천 장소에 마커 표시
+        rec.places.forEach { place ->
+            val selectedIndex = selectedOrder.indexOfFirst { it == place.id }
+            val isSelected = selectedIndex != -1
+            val isTopPick = topIds.contains(place.id)
+
+            val options = LabelOptions.from(LatLng.from(place.lat, place.lng))
+                .setClickable(true)
+
+            when {
+                isSelected -> {
+                    // 선택된 장소: 주황색 핀 + 번호
+                    options.setTexts("${selectedIndex + 1}")
+                    options.setStyles(orangePinStyle)
+                }
+                isTopPick -> {
+                    // Top Pick: 골드색 핀
+                    options.setStyles(starPinStyle)
+                }
+                else -> {
+                    // 일반 장소: 파란색 핀
+                    options.setStyles(bluePinStyle)
+                }
+            }
+
+            labelManager.layer?.addLabel(options)?.let { label ->
+                labelPlaceMap[label] = place
+            }
+        }
+
+        Log.d("UI", "✅ Markers added: ${labelPlaceMap.size}")
+    }
+
     val focusOn: (Place) -> Unit = { p ->
         kakaoMap?.let { map ->
             map.moveCamera(CameraUpdateFactory.newCenterPosition(LatLng.from(p.lat, p.lng)))
-            // 이전 하이라이트 원복
-            highlightedId?.let { prevId ->
-                val prevLabel = labelById[prevId]
-                val base = baseNameById[prevId]
-                if (prevLabel != null && base != null) prevLabel.setTexts(base)
-            }
-            // 지금 선택한 애 하이라이트
-            val lbl = labelById[p.id]
-            val base = baseNameById[p.id] ?: (if (topIds.contains(p.id)) "★ ${p.name}" else p.name)
-            if (lbl != null) {
-                val newText = if (base.startsWith("★ ")) base else "★ $base"
-                lbl.setTexts(newText)
-                highlightedId = p.id
-            }
+            highlightedId = p.id
         }
     }
 
     val toggleSelect: (Place) -> Unit = { p ->
-        if (selectedOrder.contains(p.id)) selectedOrder.remove(p.id) else selectedOrder.add(p.id)
-        refreshSelectedBadgesOnLabels(labelById, baseNameById, selectedOrder)
+        if (selectedOrder.contains(p.id)) {
+            selectedOrder.remove(p.id)
+        } else {
+            selectedOrder.add(p.id)
+        }
     }
 
     // 🔹 T-Map 실제 경로 생성
@@ -133,8 +205,8 @@ fun ResultScreen(
         }
 
         try {
-            val routeManager = map.getRouteLineManager() ?: return@LaunchedEffect
-            val layer = routeManager.getLayer() ?: return@LaunchedEffect
+            val routeManager = map.routeLineManager ?: return@LaunchedEffect
+            val layer = routeManager.layer ?: return@LaunchedEffect
 
             // 기존 경로 제거
             layer.removeAll()
@@ -170,7 +242,7 @@ fun ResultScreen(
                 }
             }
 
-            // 시작점과 끝점에 핀 마커 추가
+            // 시작점과 끝점에 특수 마커 추가
             if (selectedPlaces.isNotEmpty()) {
                 addStartEndMarkers(map, selectedPlaces.first(), selectedPlaces.last())
             }
@@ -204,26 +276,30 @@ fun ResultScreen(
                     }
                     mv.start(
                         object : MapLifeCycleCallback() {
-                            override fun onMapDestroy() {}
+                            override fun onMapDestroy() {
+                                kakaoMap = null
+                            }
                             override fun onMapError(p0: Exception?) {
                                 Log.e("UI", "Map error: ${p0?.message}", p0)
                             }
                         },
                         object : KakaoMapReadyCallback() {
+                            var isMapInitialized = false
                             override fun onMapReady(map: KakaoMap) {
-                                kakaoMap = map
-                                addMarkersAndStore(
-                                    map = map,
-                                    places = rec.places,
-                                    topIds = topIds,
-                                    labelById = labelById,
-                                    baseNameById = baseNameById
-                                )
-                                rec.places.firstOrNull()?.let {
-                                    map.moveCamera(
-                                        CameraUpdateFactory.newCenterPosition(LatLng.from(it.lat, it.lng))
-                                    )
+                                if (!isMapInitialized) {
+                                    rec.places.firstOrNull()?.let {
+                                        map.moveCamera(
+                                            CameraUpdateFactory.newCenterPosition(LatLng.from(it.lat, it.lng))
+                                        )
+                                    }
+                                    map.setOnLabelClickListener { _, _, label ->
+                                        labelPlaceMap[label]?.let { place ->
+                                            focusOn(place)
+                                        }
+                                    }
+                                    isMapInitialized = true
                                 }
+                                kakaoMap = map
                             }
                         }
                     )
@@ -311,7 +387,6 @@ fun ResultScreen(
                 OutlinedButton(
                     onClick = {
                         selectedOrder.clear()
-                        refreshSelectedBadgesOnLabels(labelById, baseNameById, selectedOrder)
                         kakaoMap?.let { clearRoutePolyline(it) }
                         routeSegments = emptyList()
                         showRealRoute = false
@@ -679,62 +754,33 @@ private fun SmallBadge(text: String) {
     }
 }
 
-private fun addMarkersAndStore(
-    map: KakaoMap,
-    places: List<Place>,
-    topIds: Set<String>,
-    labelById: MutableMap<String, Label>,
-    baseNameById: MutableMap<String, String>
-) {
-    labelById.clear()
-    baseNameById.clear()
-
-    val manager = map.getLabelManager() ?: return
-    val layer = manager.layer ?: return
-    layer.removeAll()
-
-    Log.d("UI", "addMarkersAndStore: adding ${places.size} markers")
-    places.forEach { p ->
-        val base = if (topIds.contains(p.id)) "★ ${p.name}" else p.name
-        val label = layer.addLabel(
-            LabelOptions.from(LatLng.from(p.lat, p.lng))
-                .setTexts(base)
-        )
-        label?.show()
-        if (label != null) {
-            labelById[p.id] = label
-            baseNameById[p.id] = base
-        }
-    }
-}
-
 /**
  * 🔹 시작점과 끝점에 커스텀 핀 마커 추가
  */
 private fun addStartEndMarkers(map: KakaoMap, start: Place, end: Place) {
     try {
-        val manager = map.getLabelManager() ?: return
+        val manager = map.labelManager ?: return
         val layer = manager.layer ?: return
 
         // 시작점 마커 (초록색)
-        val startBitmap = createPinBitmap(Color.rgb(52, 168, 83), "출발")
+        val startBitmap = createStartEndPinBitmap(Color.rgb(52, 168, 83), "출발")
         val startLabel = layer.addLabel(
             LabelOptions.from(LatLng.from(start.lat, start.lng))
                 .setStyles(
                     LabelStyles.from(
-                        LabelStyle.from(startBitmap).setApplyDpScale(false)
+                        LabelStyle.from(startBitmap).setApplyDpScale(false).setAnchorPoint(0.5f, 1.0f)
                     )
                 )
         )
         startLabel?.show()
 
         // 끝점 마커 (빨간색)
-        val endBitmap = createPinBitmap(Color.rgb(234, 67, 53), "도착")
+        val endBitmap = createStartEndPinBitmap(Color.rgb(234, 67, 53), "도착")
         val endLabel = layer.addLabel(
             LabelOptions.from(LatLng.from(end.lat, end.lng))
                 .setStyles(
                     LabelStyles.from(
-                        LabelStyle.from(endBitmap).setApplyDpScale(false)
+                        LabelStyle.from(endBitmap).setApplyDpScale(false).setAnchorPoint(0.5f, 1.0f)
                     )
                 )
         )
@@ -747,9 +793,60 @@ private fun addStartEndMarkers(map: KakaoMap, start: Place, end: Place) {
 }
 
 /**
- * 🔹 커스텀 핀 비트맵 생성 (색상과 텍스트 포함)
+ * 🔹 색상이 지정된 핀 마커 비트맵 생성 (Capstone-Backup 방식)
  */
-private fun createPinBitmap(color: Int, text: String): Bitmap {
+private fun createPinBitmap(context: android.content.Context, colorHex: String): Bitmap? {
+    return try {
+        val density = context.resources.displayMetrics.density
+        val width = (24 * density).toInt()
+        val height = (32 * density).toInt()
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint().apply {
+            isAntiAlias = true
+        }
+
+        val centerX = width / 2f
+        val topCircleRadius = width / 2.5f
+
+        val path = Path().apply {
+            moveTo(centerX, height.toFloat())
+            lineTo(centerX - topCircleRadius * 0.6f, height - topCircleRadius * 1.5f)
+            lineTo(centerX + topCircleRadius * 0.6f, height - topCircleRadius * 1.5f)
+            close()
+        }
+
+        // 핀 색상
+        paint.color = Color.parseColor(colorHex)
+        paint.style = Paint.Style.FILL
+
+        canvas.drawCircle(centerX, topCircleRadius * 1.2f, topCircleRadius, paint)
+        canvas.drawPath(path, paint)
+
+        // 흰색 테두리
+        paint.color = Color.WHITE
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 3f
+        canvas.drawCircle(centerX, topCircleRadius * 1.2f, topCircleRadius, paint)
+        canvas.drawPath(path, paint)
+
+        // 중앙 흰색 점
+        paint.color = Color.WHITE
+        paint.style = Paint.Style.FILL
+        canvas.drawCircle(centerX, topCircleRadius * 1.2f, topCircleRadius * 0.3f, paint)
+
+        bitmap
+    } catch (e: Exception) {
+        Log.e("UI", "Failed to create pin bitmap", e)
+        null
+    }
+}
+
+/**
+ * 🔹 시작/끝 커스텀 핀 비트맵 생성 (색상과 텍스트 포함)
+ */
+private fun createStartEndPinBitmap(color: Int, text: String): Bitmap {
     val width = 120
     val height = 140
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -766,7 +863,7 @@ private fun createPinBitmap(color: Int, text: String): Bitmap {
     canvas.drawCircle(width / 2f, height / 3f, width / 3f, paint)
 
     // 하단 삼각형 (핀 모양)
-    val path = android.graphics.Path().apply {
+    val path = Path().apply {
         moveTo(width / 2f - width / 6f, height / 2f)
         lineTo(width / 2f, height.toFloat())
         lineTo(width / 2f + width / 6f, height / 2f)
@@ -787,25 +884,11 @@ private fun createPinBitmap(color: Int, text: String): Bitmap {
     return bitmap
 }
 
-private fun refreshSelectedBadgesOnLabels(
-    labelById: Map<String, Label>,
-    baseNameById: Map<String, String>,
-    selectedOrder: List<String>
-) {
-    // 기본으로 돌려놓고
-    baseNameById.forEach { (id, base) -> labelById[id]?.setTexts(base) }
-    // 선택 순번 적용
-    selectedOrder.forEachIndexed { index, id ->
-        val base = baseNameById[id]
-        if (base != null) labelById[id]?.setTexts("[${index + 1}] $base")
-    }
-}
-
 private fun clearRoutePolyline(map: KakaoMap) {
     try {
         // RouteLineManager로 경로선 제거
-        val routeManager = map.getRouteLineManager()
-        val routeLayer = routeManager?.getLayer()
+        val routeManager = map.routeLineManager
+        val routeLayer = routeManager?.layer
         routeLayer?.removeAll()
 
         Log.d("UI", "✅ 경로선 제거 완료")
