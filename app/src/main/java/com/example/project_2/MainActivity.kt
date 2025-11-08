@@ -52,7 +52,8 @@ class MainActivity : ComponentActivity() {
         OpenAiService.init(BuildConfig.OPENAI_API_KEY)
 
         // ViewModel & Repository
-        val repo = RealTravelRepository()
+        val gptReranker = com.example.project_2.domain.GptRerankUseCase(OpenAiService)
+        val repo = RealTravelRepository(gptReranker)
         val mainVm = MainViewModel(repo)
 
         setContent {
