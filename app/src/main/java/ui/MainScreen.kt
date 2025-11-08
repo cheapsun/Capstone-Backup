@@ -31,11 +31,18 @@ fun MainScreen(
     val focusManager = LocalFocusManager.current
     val onGoResultState by rememberUpdatedState(onGoResult)
 
-    // ✅ ViewModel에서 lastResult가 갱신되면 단 한 번 콜백 후 consume
+    // 이미 네비게이션한 결과 ID를 추적 (중복 네비게이션 방지)
+    var navigatedResultId by remember { mutableStateOf<String?>(null) }
+
+    // ✅ ViewModel에서 lastResult가 갱신되면 지도 화면으로 네비게이션
     LaunchedEffect(ui.lastResult) {
-        ui.lastResult?.let {
-            onGoResultState(it)
-            vm.consumeResult() // 결과 넘긴 뒤 클리어하여 재호출 방지
+        ui.lastResult?.let { result ->
+            // 같은 결과로 중복 네비게이션 방지
+            val resultId = result.places.firstOrNull()?.id ?: result.hashCode().toString()
+            if (navigatedResultId != resultId) {
+                navigatedResultId = resultId
+                onGoResultState(result)
+            }
         }
     }
 
