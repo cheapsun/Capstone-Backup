@@ -35,6 +35,8 @@ import com.example.project_2.domain.repo.RealTravelRepository
 import com.example.project_2.ui.main.MainScreen
 import com.example.project_2.ui.main.MainViewModel
 import com.example.project_2.ui.result.ResultScreen
+import com.example.project_2.ui.route.RouteDetailScreen
+import com.example.project_2.ui.route.RouteListScreen
 import com.example.project_2.ui.theme.Project2Theme
 import com.kakao.vectormap.KakaoMapSdk
 
@@ -103,8 +105,28 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Screen.Route.route) {
-                            // TODO: 루트 화면 구현 (향후 확장)
-                            Text("루트 화면 - 향후 구현 예정")
+                            RouteListScreen(
+                                onRouteClick = { routeId ->
+                                    navController.navigate("route_detail/$routeId")
+                                }
+                            )
+                        }
+
+                        composable("route_detail/{routeId}") { backStackEntry ->
+                            val routeId = backStackEntry.arguments?.getString("routeId") ?: return@composable
+                            RouteDetailScreen(
+                                routeId = routeId,
+                                onBackClick = {
+                                    navController.popBackStack()
+                                },
+                                onShowOnMap = {
+                                    // 지도 화면으로 이동
+                                    navController.navigate(Screen.Map.route) {
+                                        popUpTo(Screen.Route.route)
+                                        launchSingleTop = true
+                                    }
+                                }
+                            )
                         }
                     }
                 }

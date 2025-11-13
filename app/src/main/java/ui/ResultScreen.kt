@@ -27,11 +27,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
+import com.example.project_2.data.RouteStorage
 import com.example.project_2.data.route.TmapPedestrianService
 import com.example.project_2.domain.model.Place
 import com.example.project_2.domain.model.RecommendationResult
 import com.example.project_2.domain.model.RouteSegment
+import com.example.project_2.domain.model.SavedRoute
 import com.example.project_2.domain.model.WeatherInfo
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -103,6 +106,10 @@ fun ResultScreen(
     val fusedLocationClient = remember {
         LocationServices.getFusedLocationProviderClient(context)
     }
+
+    // 🔹 루트 저장 다이얼로그 상태
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var routeNameInput by remember { mutableStateOf("") }
 
     // 🔹 내 위치 가져오기 및 마커 표시/제거
     LaunchedEffect(showMyLocation, kakaoMap) {
@@ -516,41 +523,78 @@ fun ResultScreen(
 
         // 🔹 하단 액션 (T-Map 경로 생성 버튼 추가)
         item(key = "actions") {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedButton(
-                    onClick = {
-                        selectedOrder.clear()
-                        routeSegments = emptyList()
-                        showRealRoute = false
-                        // LaunchedEffect가 자동으로 마커 및 경로 업데이트
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text("선택 초기화") }
-
-                Button(
-                    onClick = { buildRealRoute() },
-                    enabled = selectedOrder.size >= 2 && !isLoadingRoute,
-                    modifier = Modifier.weight(2f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (isLoadingRoute) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
+                    OutlinedButton(
+                        onClick = {
+                            selectedOrder.clear()
+                            routeSegments = emptyList()
+                            showRealRoute = false
+                            // LaunchedEffect가 자동으로 마커 및 경로 업데이트
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("선택 초기화") }
+
+                    Button(
+                        onClick = { buildRealRoute() },
+                        enabled = selectedOrder.size >= 2 && !isLoadingRoute,
+                        modifier = Modifier.weight(2f)
+                    ) {
+                        if (isLoadingRoute) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("경로 생성 중...")
+                        } else {
+                            Text("루트 생성하기 (${selectedOrder.size}개)")
+                        }
+                    }
+                }
+
+                // 루트 저장 버튼 (루트 생성 완료 후에만 표시)
+                if (showRealRoute && routeSegments.isNotEmpty()) {
+                    Button(
+                        onClick = { showSaveDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Text("경로 생성 중...")
-                    } else {
-                        Text("루트 생성하기 (${selectedOrder.size}개)")
+                    ) {
+                        Text("루트 저장하기")
                     }
                 }
             }
         }
+    }
+
+    // 🔹 루트 저장 다이얼로그
+    if (showSaveDialog) {
+        SaveRouteDialog(
+            onDismiss = { showSaveDialog = false },
+            onSave = { routeName ->
+                val savedRoute = SavedRoute(
+                    id = System.currentTimeMillis().toString(),
+                    name = routeName,
+                    places = selectedPlaces,
+                    routeSegments = routeSegments
+                )
+                RouteStorage.getInstance(context).saveRoute(savedRoute)
+                Toast.makeText(context, "루트가 저장되었습니다", Toast.LENGTH_SHORT).show()
+                showSaveDialog = false
+                routeNameInput = ""
+            }
+        )
     }
 }
 
@@ -1059,4 +1103,68 @@ private fun buildNaverQuery(place: Place, regionHint: String? = null): String {
         parts += place.address!!
     }
     return parts.joinToString(" ")
+}
+
+/**
+ * 🔹 루트 저장 다이얼로그
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SaveRouteDialog(
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var routeName by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    "루트 저장",
+                    style = MaterialTheme.typography.titleLarge
+                )
+
+                OutlinedTextField(
+                    value = routeName,
+                    onValueChange = { routeName = it },
+                    label = { Text("루트 이름") },
+                    placeholder = { Text("예: 강남 맛집 투어") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("취소")
+                    }
+
+                    Button(
+                        onClick = {
+                            if (routeName.isNotBlank()) {
+                                onSave(routeName)
+                            }
+                        },
+                        enabled = routeName.isNotBlank(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("저장")
+                    }
+                }
+            }
+        }
+    }
 }
