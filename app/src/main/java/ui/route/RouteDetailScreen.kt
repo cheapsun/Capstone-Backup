@@ -135,8 +135,9 @@ fun RouteDetailScreen(
             // 🔹 편집 모드: 드래그 가능
             val reorderableState = rememberReorderableLazyListState(
                 onMove = { from, to ->
-                    val item = editablePlaces.removeAt(from.index - 1) // -1은 헤더 때문
-                    editablePlaces.add(to.index - 1, item)
+                    // ✅ ReorderableItem만 추적하므로 -1 불필요
+                    val item = editablePlaces.removeAt(from.index)
+                    editablePlaces.add(to.index, item)
                 }
             )
 
