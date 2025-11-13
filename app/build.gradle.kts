@@ -114,4 +114,7 @@ dependencies {
 
     // Google Play Services Location (for GPS location)
     implementation("com.google.android.gms:play-services-location:21.3.0")
+
+    // Drag and Drop for Compose
+    implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
 }
