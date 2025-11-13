@@ -130,6 +130,9 @@ fun ResultScreen(
     var expandedRouteList by remember { mutableStateOf(false) }
     var highlightedSegmentIndex by remember { mutableStateOf<Int?>(null) }
 
+    // 🔹 추천 장소 리스트 상태
+    var expandedPlacesList by remember { mutableStateOf(true) }  // 기본 펼침
+
     // 🔹 내 위치 가져오기 및 마커 표시/제거
     LaunchedEffect(showMyLocation, kakaoMap) {
         val map = kakaoMap ?: return@LaunchedEffect
@@ -293,27 +296,24 @@ fun ResultScreen(
                     if (coords.size >= 2) {
                         val baseColor = colors[index % colors.size]
 
-                        // 🔹 하이라이트 기능: 선택된 구간만 강조
+                        // 🔹 하이라이트 기능: 선택된 구간만 표시
                         val isHighlighted = highlightedSegmentIndex == index
                         val isAnyHighlighted = highlightedSegmentIndex != null
 
-                        val lineWidth = when {
-                            isHighlighted -> 24f  // 선택된 구간: 두껍게
-                            isAnyHighlighted -> 12f  // 다른 구간: 얇게
-                            else -> 18f  // 하이라이트 없음: 기본
+                        // 하이라이트가 있을 때, 선택되지 않은 구간은 완전히 투명 (숨김)
+                        if (isAnyHighlighted && !isHighlighted) {
+                            // 선택되지 않은 구간은 그리지 않음
+                            return@forEachIndexed
                         }
 
-                        val finalColor = when {
-                            isHighlighted -> baseColor  // 선택된 구간: 원래 색상
-                            isAnyHighlighted -> Color.argb(80, Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor))  // 다른 구간: 반투명
-                            else -> baseColor  // 하이라이트 없음: 원래 색상
-                        }
+                        // 모든 경로선 굵기 18f로 통일
+                        val lineWidth = 18f
 
                         val options = RouteLineOptions.from(
                             RouteLineSegment.from(coords)
                                 .setStyles(
                                     RouteLineStyles.from(
-                                        RouteLineStyle.from(lineWidth, finalColor)
+                                        RouteLineStyle.from(lineWidth, baseColor)
                                     )
                                 )
                         )
@@ -531,31 +531,6 @@ fun ResultScreen(
             }
         }
 
-        // 추천 장소 타이틀
-        item(key = "list_title") {
-            Text(
-                "추천 장소",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-
-        // 추천 장소 리스트
-        items(rec.places, key = { it.id }) { p ->
-            PlaceRow(
-                p = p,
-                reason = rec.gptReasons[p.id],
-                isSelected = selectedOrder.contains(p.id),
-                aiMarked = rec.aiTopIds.contains(p.id),
-                catTop = topIds.contains(p.id),
-                regionHint = regionHint,   // ✅ 지역 힌트 넘김
-                onToggle = {
-                    toggleSelect(p)
-                    focusOn(p)
-                }
-            )
-        }
-
         // 🔹 하단 액션 (T-Map 경로 생성 버튼 추가)
         item(key = "actions") {
             Column(
@@ -612,7 +587,7 @@ fun ResultScreen(
             }
         }
 
-        // 🔹 경로 구간 리스트 (접이식)
+        // 🔹 경로 구간 리스트 (접이식) - 먼저 표시
         if (showRealRoute && routeSegments.isNotEmpty()) {
             item(key = "route_segments") {
                 RouteSegmentsList(
@@ -635,6 +610,24 @@ fun ResultScreen(
                     }
                 )
             }
+        }
+
+        // 🔹 추천 장소 접이식 리스트 - 나중에 표시
+        item(key = "places_list") {
+            PlacesExpandableList(
+                places = rec.places,
+                selectedOrder = selectedOrder,
+                topIds = topIds,
+                aiTopIds = rec.aiTopIds,
+                gptReasons = rec.gptReasons,
+                regionHint = regionHint,
+                expanded = expandedPlacesList,
+                onToggleExpand = { expandedPlacesList = !expandedPlacesList },
+                onPlaceToggle = { place ->
+                    toggleSelect(place)
+                    focusOn(place)
+                }
+            )
         }
     }
 
@@ -1366,6 +1359,71 @@ private fun RouteSegmentsList(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.padding(16.dp)
                 )
+            }
+        }
+    }
+}
+
+/**
+ * 🔹 추천 장소 접이식 리스트
+ */
+@Composable
+private fun PlacesExpandableList(
+    places: List<Place>,
+    selectedOrder: List<String>,
+    topIds: Set<String>,
+    aiTopIds: Set<String>,
+    gptReasons: Map<String, String>,
+    regionHint: String?,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onPlaceToggle: (Place) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // 헤더 (항상 표시)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleExpand() }
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "추천 장소 (${places.size}개)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    if (expanded) "▲" else "▼",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            // 장소 리스트 (펼쳤을 때만 표시)
+            if (expanded) {
+                Divider()
+                
+                places.forEach { place ->
+                    PlaceRow(
+                        p = place,
+                        reason = gptReasons[place.id],
+                        isSelected = selectedOrder.contains(place.id),
+                        aiMarked = aiTopIds.contains(place.id),
+                        catTop = topIds.contains(place.id),
+                        regionHint = regionHint,
+                        onToggle = { onPlaceToggle(place) }
+                    )
+                }
             }
         }
     }
