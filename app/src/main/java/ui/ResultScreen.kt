@@ -23,8 +23,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import sh.calvin.reorderable.reorderable
-import sh.calvin.reorderable.draggableHandle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsWalk
@@ -1246,9 +1244,7 @@ private fun SelectedPlacesList(
             // 드래그 가능한 리스트
             LazyColumn(
                 state = lazyListState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .reorderable(state)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 itemsIndexed(selectedPlaces, key = { _, place -> place.id }) { index, place ->
                     ReorderableItem(state, key = place.id) { isDragging ->
@@ -1256,8 +1252,7 @@ private fun SelectedPlacesList(
                             place = place,
                             index = index,
                             isDragging = isDragging,
-                            onRemove = { onRemove(place) },
-                            dragModifier = Modifier.draggableHandle()
+                            onRemove = { onRemove(place) }
                         )
                     }
                 }
@@ -1283,12 +1278,11 @@ private fun SelectedPlacesList(
  * 드래그 가능한 장소 아이템
  */
 @Composable
-private fun DraggablePlace(
+private fun sh.calvin.reorderable.ReorderableCollectionItemScope.DraggablePlace(
     place: Place,
     index: Int,
     isDragging: Boolean,
-    onRemove: () -> Unit,
-    dragModifier: Modifier = Modifier
+    onRemove: () -> Unit
 ) {
     Surface(
         modifier = Modifier
@@ -1314,7 +1308,9 @@ private fun DraggablePlace(
                 imageVector = Icons.Default.DragHandle,
                 contentDescription = "드래그",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = dragModifier.size(24.dp)
+                modifier = Modifier
+                    .draggableHandle()
+                    .size(24.dp)
             )
 
             // 순서 번호

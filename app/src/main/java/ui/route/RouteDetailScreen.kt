@@ -11,8 +11,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import sh.calvin.reorderable.reorderable
-import sh.calvin.reorderable.draggableHandle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -161,7 +159,7 @@ fun RouteDetailScreen(
                 }
             } else {
                 // 일반 모드: 타임라인 뷰
-                foundationItemsIndexed(route!!.places, key = { _, place -> place.id }) { index, place ->
+                itemsIndexed(route!!.places, key = { _, place -> place.id }) { index, place ->
                     PlaceItemCard(
                         place = place,
                         index = index,
@@ -426,17 +424,14 @@ private fun EditablePlacesList(
             // 드래그 가능한 리스트
             LazyColumn(
                 state = lazyListState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .reorderable(state)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 itemsIndexed(places, key = { _, place -> place.id }) { index, place ->
                     ReorderableItem(state, key = place.id) { isDragging ->
                         EditablePlaceItem(
                             place = place,
                             index = index,
-                            isDragging = isDragging,
-                            dragModifier = Modifier.draggableHandle()
+                            isDragging = isDragging
                         )
                     }
                 }
@@ -462,11 +457,10 @@ private fun EditablePlacesList(
  * 편집 가능한 장소 아이템
  */
 @Composable
-private fun EditablePlaceItem(
+private fun sh.calvin.reorderable.ReorderableCollectionItemScope.EditablePlaceItem(
     place: Place,
     index: Int,
-    isDragging: Boolean,
-    dragModifier: Modifier = Modifier
+    isDragging: Boolean
 ) {
     Surface(
         modifier = Modifier
@@ -492,7 +486,9 @@ private fun EditablePlaceItem(
                 imageVector = Icons.Default.DragHandle,
                 contentDescription = "드래그",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = dragModifier.size(24.dp)
+                modifier = Modifier
+                    .draggableHandle()
+                    .size(24.dp)
             )
 
             // 순서 번호
