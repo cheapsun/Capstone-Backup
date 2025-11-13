@@ -20,10 +20,14 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -599,6 +603,35 @@ fun ResultScreen(
             }
         }
 
+        // 🔹 선택된 장소 드래그 리스트
+        if (selectedOrder.isNotEmpty()) {
+            item(key = "selected_places") {
+                SelectedPlacesList(
+                    selectedPlaces = selectedPlaces,
+                    selectedOrder = selectedOrder,
+                    onReorder = { fromIndex, toIndex ->
+                        // 순서 변경
+                        val fromId = selectedOrder[fromIndex]
+                        selectedOrder.removeAt(fromIndex)
+                        selectedOrder.add(toIndex, fromId)
+
+                        // 경로가 생성되어 있으면 초기화 (재생성 필요)
+                        if (showRealRoute) {
+                            routeSegments = emptyList()
+                            showRealRoute = false
+                        }
+                    },
+                    onRemove = { place ->
+                        selectedOrder.remove(place.id)
+                        if (showRealRoute && selectedOrder.size < 2) {
+                            routeSegments = emptyList()
+                            showRealRoute = false
+                        }
+                    }
+                )
+            }
+        }
+
         // 🔹 경로 구간 리스트 (접이식) - 먼저 표시
         if (showRealRoute && routeSegments.isNotEmpty()) {
             item(key = "route_segments") {
@@ -1145,6 +1178,179 @@ private fun clearRoutePolyline(map: KakaoMap) {
         Log.d("UI", "✅ 경로선 제거 완료")
     } catch (e: Exception) {
         Log.e("UI", "❌ 경로선 제거 실패: ${e.message}", e)
+    }
+}
+
+/**
+ * 🔹 선택된 장소 드래그 리스트
+ */
+@Composable
+private fun SelectedPlacesList(
+    selectedPlaces: List<Place>,
+    selectedOrder: SnapshotStateList<String>,
+    onReorder: (Int, Int) -> Unit,
+    onRemove: (Place) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // 헤더
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Place,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        "선택된 장소 (${selectedPlaces.size}곳)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Divider()
+
+            // 드래그 가능한 리스트
+            sh.calvin.reorderable.ReorderableColumn(
+                list = selectedPlaces,
+                onSettle = { fromIndex, toIndex ->
+                    onReorder(fromIndex, toIndex)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { index, place, isDragging ->
+                key(place.id) {
+                    DraggablePlace(
+                        place = place,
+                        index = index,
+                        isDragging = isDragging,
+                        onRemove = { onRemove(place) }
+                    )
+                }
+            }
+
+            // 힌트 텍스트
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "💡 길게 눌러서 드래그하여 순서를 변경하세요",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 드래그 가능한 장소 아이템
+ */
+@Composable
+private fun DraggablePlace(
+    place: Place,
+    index: Int,
+    isDragging: Boolean,
+    onRemove: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        color = if (isDragging) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        } else {
+            ComposeColor.Transparent
+        },
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = if (isDragging) 4.dp else 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 드래그 핸들
+            Icon(
+                imageVector = Icons.Default.DragHandle,
+                contentDescription = "드래그",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
+            )
+
+            // 순서 번호
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "${index + 1}",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+
+            // 장소명
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    place.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!place.address.isNullOrBlank()) {
+                    Text(
+                        place.address!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // 제거 버튼
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "제거",
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
     }
 }
 

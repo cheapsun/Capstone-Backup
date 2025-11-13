@@ -114,4 +114,7 @@ dependencies {
 
     // Google Play Services Location (for GPS location)
     implementation("com.google.android.gms:play-services-location:21.3.0")
+
+    // Reorderable list for drag-and-drop functionality
+    implementation("sh.calvin.reorderable:reorderable:2.3.3")
 }

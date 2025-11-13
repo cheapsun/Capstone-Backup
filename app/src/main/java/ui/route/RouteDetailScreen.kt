@@ -2,6 +2,7 @@ package com.example.project_2.ui.route
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,7 +10,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.project_2.data.RouteStorage
 import com.example.project_2.domain.model.Place
@@ -33,7 +38,9 @@ fun RouteDetailScreen(
 ) {
     val context = LocalContext.current
     val routeStorage = remember { RouteStorage.getInstance(context) }
-    val route = remember { routeStorage.getRoute(routeId) }
+    var route by remember { mutableStateOf(routeStorage.getRoute(routeId)) }
+    var isEditMode by remember { mutableStateOf(false) }
+    var editedPlaces by remember { mutableStateOf<List<Place>>(emptyList()) }
 
     if (route == null) {
         // 루트를 찾을 수 없음
@@ -49,10 +56,25 @@ fun RouteDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("루트 상세") },
+                title = { Text(if (isEditMode) "루트 편집" else "루트 상세") },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+                    }
+                },
+                actions = {
+                    if (!isEditMode) {
+                        IconButton(
+                            onClick = {
+                                isEditMode = true
+                                editedPlaces = route!!.places.toList()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Edit,
+                                contentDescription = "편집"
+                            )
+                        }
                     }
                 }
             )
@@ -62,16 +84,48 @@ fun RouteDetailScreen(
                 tonalElevation = 3.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Button(
-                    onClick = onShowOnMap,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Text("지도로 보기", style = MaterialTheme.typography.titleMedium)
+                if (isEditMode) {
+                    // 편집 모드: 저장/취소 버튼
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                isEditMode = false
+                                editedPlaces = emptyList()
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("취소")
+                        }
+                        Button(
+                            onClick = {
+                                // TODO: T-Map API로 경로 재계산 후 저장
+                                // 지금은 임시로 순서만 저장
+                                Toast.makeText(context, "순서 변경 후 경로 재계산 기능은 곧 추가됩니다", Toast.LENGTH_SHORT).show()
+                                isEditMode = false
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("저장")
+                        }
+                    }
+                } else {
+                    // 일반 모드: 지도로 보기 버튼
+                    Button(
+                        onClick = onShowOnMap,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text("지도로 보기", style = MaterialTheme.typography.titleMedium)
+                    }
                 }
             }
         }
@@ -84,19 +138,34 @@ fun RouteDetailScreen(
         ) {
             // 헤더
             item {
-                RouteHeader(route)
+                RouteHeader(route!!)
             }
 
-            // 장소 리스트
-            itemsIndexed(route.places, key = { _, place -> place.id }) { index, place ->
-                PlaceItemCard(
-                    place = place,
-                    index = index,
-                    isLast = index == route.places.size - 1,
-                    nextSegment = if (index < route.routeSegments.size) {
-                        route.routeSegments[index]
-                    } else null
-                )
+            if (isEditMode) {
+                // 편집 모드: 드래그 가능한 리스트
+                item {
+                    EditablePlacesList(
+                        places = editedPlaces,
+                        onReorder = { fromIndex, toIndex ->
+                            val mutableList = editedPlaces.toMutableList()
+                            val item = mutableList.removeAt(fromIndex)
+                            mutableList.add(toIndex, item)
+                            editedPlaces = mutableList
+                        }
+                    )
+                }
+            } else {
+                // 일반 모드: 타임라인 뷰
+                itemsIndexed(route!!.places, key = { _, place -> place.id }) { index, place ->
+                    PlaceItemCard(
+                        place = place,
+                        index = index,
+                        isLast = index == route!!.places.size - 1,
+                        nextSegment = if (index < route!!.routeSegments.size) {
+                            route!!.routeSegments[index]
+                        } else null
+                    )
+                }
             }
         }
     }
@@ -308,6 +377,144 @@ private fun PlaceItemCard(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 편집 모드 드래그 가능한 장소 리스트
+ */
+@Composable
+private fun EditablePlacesList(
+    places: List<Place>,
+    onReorder: (Int, Int) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // 헤더
+            Text(
+                "순서 변경",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(16.dp)
+            )
+
+            HorizontalDivider()
+
+            // 드래그 가능한 리스트
+            sh.calvin.reorderable.ReorderableColumn(
+                list = places,
+                onSettle = { fromIndex, toIndex ->
+                    onReorder(fromIndex, toIndex)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { index, place, isDragging ->
+                key(place.id) {
+                    EditablePlaceItem(
+                        place = place,
+                        index = index,
+                        isDragging = isDragging
+                    )
+                }
+            }
+
+            // 힌트
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "💡 길게 눌러서 드래그하여 순서를 변경하세요",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 편집 가능한 장소 아이템
+ */
+@Composable
+private fun EditablePlaceItem(
+    place: Place,
+    index: Int,
+    isDragging: Boolean
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        color = if (isDragging) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        } else {
+            Color.Transparent
+        },
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = if (isDragging) 4.dp else 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 드래그 핸들
+            Icon(
+                imageVector = Icons.Default.DragHandle,
+                contentDescription = "드래그",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
+            )
+
+            // 순서 번호
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "${index + 1}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+
+            // 장소 정보
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    place.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!place.address.isNullOrBlank()) {
+                    Text(
+                        place.address!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
