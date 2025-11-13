@@ -6,6 +6,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -17,6 +19,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -27,6 +30,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.project_2.data.KakaoLocalService
+import com.example.project_2.data.RouteStorage
+import com.example.project_2.domain.model.RecommendationResult
 import com.example.project_2.data.openai.OpenAiService
 import com.example.project_2.data.weather.WeatherService
 import com.example.project_2.data.route.TmapPedestrianService
@@ -120,13 +125,42 @@ class MainActivity : ComponentActivity() {
                                     navController.popBackStack()
                                 },
                                 onShowOnMap = {
-                                    // 지도 화면으로 이동
-                                    navController.navigate(Screen.Map.route) {
-                                        popUpTo(Screen.Route.route)
+                                    // 저장된 루트를 지도에 표시
+                                    navController.navigate("route_map/$routeId") {
                                         launchSingleTop = true
                                     }
                                 }
                             )
+                        }
+
+                        composable("route_map/{routeId}") { backStackEntry ->
+                            val context = LocalContext.current
+                            val routeId = backStackEntry.arguments?.getString("routeId") ?: return@composable
+                            val routeStorage = remember { RouteStorage.getInstance(context) }
+                            val savedRoute = remember { routeStorage.getRoute(routeId) }
+
+                            if (savedRoute != null) {
+                                // SavedRoute를 RecommendationResult로 변환
+                                val tempRec = RecommendationResult(
+                                    places = savedRoute.places,
+                                    weather = null,
+                                    gptReasons = emptyMap(),
+                                    aiTopIds = emptySet(),
+                                    topPicks = emptyList()
+                                )
+                                ResultScreen(
+                                    rec = tempRec,
+                                    regionHint = null,
+                                    savedRoute = savedRoute
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("루트를 찾을 수 없습니다")
+                                }
+                            }
                         }
                     }
                 }

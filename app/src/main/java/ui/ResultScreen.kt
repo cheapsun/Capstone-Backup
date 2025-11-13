@@ -53,7 +53,8 @@ import java.net.URLEncoder
 @Composable
 fun ResultScreen(
     rec: RecommendationResult,
-    regionHint: String? = null   // ✅ 사용자가 입력했던 지역 (예: "광주 상무동")
+    regionHint: String? = null,   // ✅ 사용자가 입력했던 지역 (예: "광주 상무동")
+    savedRoute: SavedRoute? = null  // ✅ 저장된 루트 (있으면 자동으로 경로 표시)
 ) {
     Log.d("UI", "ResultScreen received ${rec.places.size} places (topPicks=${rec.topPicks.size})")
     rec.places.forEachIndexed { i, p ->
@@ -75,6 +76,17 @@ fun ResultScreen(
     var showRealRoute by remember { mutableStateOf(false) }
 
     val topIds: Set<String> = remember(rec.topPicks) { rec.topPicks.map { it.id }.toSet() }
+
+    // 🔹 저장된 루트가 있으면 자동으로 장소 선택 및 경로 표시
+    LaunchedEffect(savedRoute) {
+        if (savedRoute != null) {
+            selectedOrder.clear()
+            selectedOrder.addAll(savedRoute.places.map { it.id })
+            routeSegments = savedRoute.routeSegments
+            showRealRoute = true
+            Log.d("UI", "✅ 저장된 루트 로드: ${savedRoute.name}, ${savedRoute.places.size}개 장소")
+        }
+    }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
