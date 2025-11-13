@@ -556,7 +556,7 @@ fun ResultScreen(
                     Button(
                         onClick = { buildRealRoute() },
                         enabled = selectedOrder.size >= 2 && !isLoadingRoute,
-                        modifier = Modifier.weight(2f)
+                        modifier = Modifier.weight(1f)
                     ) {
                         if (isLoadingRoute) {
                             CircularProgressIndicator(
