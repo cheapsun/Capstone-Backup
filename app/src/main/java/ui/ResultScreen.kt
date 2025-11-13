@@ -639,8 +639,12 @@ fun ResultScreen(
                 val savedRoute = SavedRoute(
                     id = System.currentTimeMillis().toString(),
                     name = routeName,
-                    places = selectedPlaces,
-                    routeSegments = routeSegments
+                    selectedPlaces = selectedPlaces,
+                    routeSegments = routeSegments,
+                    allRecommendedPlaces = rec.places,      // 🔹 모든 추천 장소 저장
+                    gptReasons = rec.gptReasons,            // 🔹 GPT 이유 저장
+                    topPicks = rec.topPicks,                // 🔹 Top Picks 저장
+                    aiTopIds = rec.aiTopIds                 // 🔹 AI Top IDs 저장
                 )
                 RouteStorage.getInstance(context).saveRoute(savedRoute)
                 Toast.makeText(context, "루트가 저장되었습니다", Toast.LENGTH_SHORT).show()

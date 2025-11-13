@@ -141,12 +141,13 @@ class MainActivity : ComponentActivity() {
 
                             if (savedRoute != null) {
                                 // SavedRoute를 RecommendationResult로 변환
+                                // ✅ allRecommendedPlaces 사용하여 모든 추천 장소 표시
                                 val tempRec = RecommendationResult(
-                                    places = savedRoute.places,
+                                    places = savedRoute.allRecommendedPlaces,
                                     weather = null,
-                                    gptReasons = emptyMap(),
-                                    aiTopIds = emptySet(),
-                                    topPicks = emptyList()
+                                    gptReasons = savedRoute.gptReasons,
+                                    aiTopIds = savedRoute.aiTopIds,
+                                    topPicks = savedRoute.topPicks
                                 )
                                 ResultScreen(
                                     rec = tempRec,
