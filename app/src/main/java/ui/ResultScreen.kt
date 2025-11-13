@@ -220,9 +220,25 @@ fun ResultScreen(
     // 🔹 LaunchedEffect로 마커 + 경로 동적 업데이트 (Capstone-Backup 방식 - 단일 Effect)
     LaunchedEffect(kakaoMap, selectedOrder.toList(), rec.places, showRealRoute, routeSegments, highlightedSegmentIndex, expandedPlacesList) {
         try {
-            val map = kakaoMap ?: return@LaunchedEffect
-            val labelManager = map.labelManager ?: return@LaunchedEffect
-            val routeLineManager = map.routeLineManager ?: return@LaunchedEffect
+            Log.d("UI", "🔵 LaunchedEffect 시작: selectedOrder=${selectedOrder.toList()}, expandedPlacesList=$expandedPlacesList")
+
+            val map = kakaoMap
+            if (map == null) {
+                Log.d("UI", "⚠️ LaunchedEffect: kakaoMap is null, 스킵")
+                return@LaunchedEffect
+            }
+
+            val labelManager = map.labelManager
+            if (labelManager == null) {
+                Log.d("UI", "⚠️ LaunchedEffect: labelManager is null, 스킵")
+                return@LaunchedEffect
+            }
+
+            val routeLineManager = map.routeLineManager
+            if (routeLineManager == null) {
+                Log.d("UI", "⚠️ LaunchedEffect: routeLineManager is null, 스킵")
+                return@LaunchedEffect
+            }
 
             // 내 위치 마커 임시 저장
             val savedMyLocationLabel = myLocationLabel
@@ -230,14 +246,17 @@ fun ResultScreen(
 
             // 기존 마커 및 경로선 모두 제거
             try {
+                Log.d("UI", "🔵 기존 마커/경로선 제거 시작")
                 labelManager.layer?.removeAll()
                 routeLineManager.layer?.removeAll()
                 labelPlaceMap.clear()
+                Log.d("UI", "✅ 기존 마커/경로선 제거 완료")
             } catch (e: Exception) {
                 Log.e("UI", "❌ 마커/경로선 제거 실패: ${e.message}", e)
+                e.printStackTrace()
             }
 
-            Log.d("UI", "LaunchedEffect: Adding markers (expandedPlacesList=$expandedPlacesList)")
+            Log.d("UI", "🔵 LaunchedEffect: 마커 추가 시작 (expandedPlacesList=$expandedPlacesList)")
 
         // 텍스트 스타일
         val textStyle = LabelStyles.from(
@@ -273,38 +292,49 @@ fun ResultScreen(
         }
 
         try {
-            placesToShow.forEach { place ->
-                val selectedIndex = selectedOrder.indexOfFirst { it == place.id }
-                val isSelected = selectedIndex != -1
-                val isTopPick = topIds.contains(place.id)
+            Log.d("UI", "🔵 마커 추가 시작: ${placesToShow.size}개")
 
-                val options = LabelOptions.from(LatLng.from(place.lat, place.lng))
-                    .setClickable(true)
+            placesToShow.forEachIndexed { idx, place ->
+                try {
+                    val selectedIndex = selectedOrder.indexOfFirst { it == place.id }
+                    val isSelected = selectedIndex != -1
+                    val isTopPick = topIds.contains(place.id)
 
-                when {
-                    isSelected -> {
-                        // 선택된 장소: 주황색 핀 + 번호
-                        options.setTexts("${selectedIndex + 1}")
-                        options.setStyles(orangePinStyle)
-                    }
-                    isTopPick -> {
-                        // Top Pick: 골드색 핀
-                        options.setStyles(starPinStyle)
-                    }
-                    else -> {
-                        // 일반 장소: 파란색 핀
-                        options.setStyles(bluePinStyle)
-                    }
-                }
+                    val options = LabelOptions.from(LatLng.from(place.lat, place.lng))
+                        .setClickable(true)
 
-                labelManager.layer?.addLabel(options)?.let { label ->
-                    labelPlaceMap[label] = place
+                    when {
+                        isSelected -> {
+                            // 선택된 장소: 주황색 핀 + 번호
+                            options.setTexts("${selectedIndex + 1}")
+                            options.setStyles(orangePinStyle)
+                        }
+                        isTopPick -> {
+                            // Top Pick: 골드색 핀
+                            options.setStyles(starPinStyle)
+                        }
+                        else -> {
+                            // 일반 장소: 파란색 핀
+                            options.setStyles(bluePinStyle)
+                        }
+                    }
+
+                    labelManager.layer?.addLabel(options)?.let { label ->
+                        labelPlaceMap[label] = place
+                    }
+
+                    if (idx % 10 == 0 && idx > 0) {
+                        Log.d("UI", "🔵 마커 추가 진행 중: $idx/${placesToShow.size}")
+                    }
+                } catch (e: Exception) {
+                    Log.e("UI", "❌ 개별 마커 추가 실패 (${place.name}): ${e.message}", e)
                 }
             }
 
-            Log.d("UI", "✅ Markers added: ${labelPlaceMap.size} (showAll=$expandedPlacesList)")
+            Log.d("UI", "✅ Markers added: ${labelPlaceMap.size}/${placesToShow.size} (showAll=$expandedPlacesList)")
         } catch (e: Exception) {
-            Log.e("UI", "❌ 마커 추가 실패: ${e.message}", e)
+            Log.e("UI", "❌ 마커 추가 전체 실패: ${e.message}", e)
+            e.printStackTrace()
         }
 
         // 🔹 실제 경로 표시 (같은 LaunchedEffect 내에서 처리)
@@ -363,6 +393,7 @@ fun ResultScreen(
         // 🔹 내 위치 마커 복원 (removeAll 후 다시 추가)
         if (savedMyLocationLatLng != null && showMyLocation) {
             try {
+                Log.d("UI", "🔵 내 위치 마커 복원 시작")
                 val redPinStyle = if (redPinBitmap != null) {
                     LabelStyles.from(LabelStyle.from(redPinBitmap).setAnchorPoint(0.5f, 1.0f))
                 } else {
@@ -373,13 +404,17 @@ fun ResultScreen(
                     .setStyles(redPinStyle)
 
                 myLocationLabel = labelManager.layer?.addLabel(options)
-                Log.d("UI", "✅ 내 위치 마커 복원")
+                Log.d("UI", "✅ 내 위치 마커 복원 완료")
             } catch (e: Exception) {
                 Log.e("UI", "❌ 내 위치 마커 복원 실패: ${e.message}", e)
+                e.printStackTrace()
             }
         }
+
+        Log.d("UI", "✅ LaunchedEffect 완료")
         } catch (e: Exception) {
-            Log.e("UI", "❌ LaunchedEffect 실패: ${e.message}", e)
+            Log.e("UI", "❌ LaunchedEffect 전체 실패: ${e.message}", e)
+            e.printStackTrace()
         }
     }
 
@@ -398,15 +433,20 @@ fun ResultScreen(
 
     val toggleSelect: (Place) -> Unit = { p ->
         try {
+            Log.d("UI", "🔵 toggleSelect 시작: ${p.name}, 현재 선택 수: ${selectedOrder.size}")
+
             if (selectedOrder.contains(p.id)) {
                 selectedOrder.remove(p.id)
-                Log.d("UI", "✅ 장소 제거: ${p.name}")
+                Log.d("UI", "✅ 장소 제거: ${p.name}, 남은 선택: ${selectedOrder.size}")
             } else {
                 selectedOrder.add(p.id)
-                Log.d("UI", "✅ 장소 추가: ${p.name}")
+                Log.d("UI", "✅ 장소 추가: ${p.name}, 총 선택: ${selectedOrder.size}")
             }
+
+            Log.d("UI", "🔵 toggleSelect 완료: selectedOrder = ${selectedOrder.toList()}")
         } catch (e: Exception) {
             Log.e("UI", "❌ 장소 추가/제거 실패: ${e.message}", e)
+            e.printStackTrace()
         }
     }
 
@@ -570,11 +610,24 @@ fun ResultScreen(
                             isSelected = selectedOrder.contains(p.id),
                             onView = { focusOn(p) },
                             onToggle = {
-                                toggleSelect(p)
-                                // 장소 추가 후 카메라 이동 (딜레이를 주어 LaunchedEffect와 충돌 방지)
-                                scope.launch {
-                                    kotlinx.coroutines.delay(100)
-                                    focusOn(p)
+                                try {
+                                    Log.d("UI", "🔵 TopPickCard onToggle 호출: ${p.name}")
+                                    toggleSelect(p)
+
+                                    // 장소 추가 후 카메라 이동 (딜레이를 주어 LaunchedEffect와 충돌 방지)
+                                    scope.launch {
+                                        try {
+                                            kotlinx.coroutines.delay(300)  // 300ms로 증가
+                                            if (kakaoMap != null) {
+                                                focusOn(p)
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.e("UI", "❌ TopPickCard 카메라 이동 스케줄 실패: ${e.message}", e)
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("UI", "❌ TopPickCard onToggle 실패: ${e.message}", e)
+                                    e.printStackTrace()
                                 }
                             }
                         )
@@ -705,11 +758,24 @@ fun ResultScreen(
                 expanded = expandedPlacesList,
                 onToggleExpand = { expandedPlacesList = !expandedPlacesList },
                 onPlaceToggle = { place ->
-                    toggleSelect(place)
-                    // 장소 추가 후 카메라 이동 (딜레이를 주어 LaunchedEffect와 충돌 방지)
-                    scope.launch {
-                        kotlinx.coroutines.delay(100)
-                        focusOn(place)
+                    try {
+                        Log.d("UI", "🔵 onPlaceToggle 호출: ${place.name}")
+                        toggleSelect(place)
+
+                        // 장소 추가 후 카메라 이동 (딜레이를 주어 LaunchedEffect와 충돌 방지)
+                        scope.launch {
+                            try {
+                                kotlinx.coroutines.delay(300)  // 300ms로 증가
+                                if (kakaoMap != null) {
+                                    focusOn(place)
+                                }
+                            } catch (e: Exception) {
+                                Log.e("UI", "❌ 카메라 이동 스케줄 실패: ${e.message}", e)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("UI", "❌ onPlaceToggle 실패: ${e.message}", e)
+                        e.printStackTrace()
                     }
                 }
             )
