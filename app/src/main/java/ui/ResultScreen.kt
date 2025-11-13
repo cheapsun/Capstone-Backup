@@ -134,7 +134,8 @@ fun ResultScreen(
     var highlightedSegmentIndex by remember { mutableStateOf<Int?>(null) }
 
     // 🔹 추천 장소 리스트 상태
-    var expandedPlacesList by remember { mutableStateOf(true) }  // 기본 펼침
+    // savedRoute가 있으면 기본 접힘 (루트만 보이도록), 없으면 펼침
+    var expandedPlacesList by remember { mutableStateOf(savedRoute == null) }
 
     // 🔹 내 위치 가져오기 및 마커 표시/제거
     LaunchedEffect(showMyLocation, kakaoMap) {
@@ -209,7 +210,7 @@ fun ResultScreen(
     }
 
     // 🔹 LaunchedEffect로 마커 + 경로 동적 업데이트 (Capstone-Backup 방식 - 단일 Effect)
-    LaunchedEffect(kakaoMap, selectedOrder.toList(), rec.places, showRealRoute, routeSegments, highlightedSegmentIndex) {
+    LaunchedEffect(kakaoMap, selectedOrder.toList(), rec.places, showRealRoute, routeSegments, highlightedSegmentIndex, expandedPlacesList) {
         val map = kakaoMap ?: return@LaunchedEffect
         val labelManager = map.labelManager ?: return@LaunchedEffect
         val routeLineManager = map.routeLineManager ?: return@LaunchedEffect
@@ -223,7 +224,7 @@ fun ResultScreen(
         routeLineManager.layer?.removeAll()
         labelPlaceMap.clear()
 
-        Log.d("UI", "LaunchedEffect: Adding ${rec.places.size} markers")
+        Log.d("UI", "LaunchedEffect: Adding markers (expandedPlacesList=$expandedPlacesList)")
 
         // 텍스트 스타일
         val textStyle = LabelStyles.from(
@@ -249,8 +250,16 @@ fun ResultScreen(
             textStyle
         }
 
-        // 모든 추천 장소에 마커 표시
-        rec.places.forEach { place ->
+        // 🔹 마커 표시: expandedPlacesList에 따라 필터링
+        val placesToShow = if (expandedPlacesList) {
+            // 추천 장소 리스트가 펼쳐져 있으면 모든 장소 표시
+            rec.places
+        } else {
+            // 추천 장소 리스트가 접혀 있으면 선택된 장소만 표시
+            selectedPlaces
+        }
+
+        placesToShow.forEach { place ->
             val selectedIndex = selectedOrder.indexOfFirst { it == place.id }
             val isSelected = selectedIndex != -1
             val isTopPick = topIds.contains(place.id)
@@ -279,7 +288,7 @@ fun ResultScreen(
             }
         }
 
-        Log.d("UI", "✅ Markers added: ${labelPlaceMap.size}")
+        Log.d("UI", "✅ Markers added: ${labelPlaceMap.size} (showAll=$expandedPlacesList)")
 
         // 🔹 실제 경로 표시 (같은 LaunchedEffect 내에서 처리)
         if (showRealRoute && routeSegments.isNotEmpty()) {
