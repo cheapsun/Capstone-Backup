@@ -18,7 +18,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
+import sh.calvin.reorderable.reorderable
+import sh.calvin.reorderable.draggableHandle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsWalk
@@ -1191,8 +1197,8 @@ private fun SelectedPlacesList(
     onReorder: (Int, Int) -> Unit,
     onRemove: (Place) -> Unit
 ) {
-    val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val state = sh.calvin.reorderable.rememberReorderableLazyListState(
+    val lazyListState = rememberLazyListState()
+    val state = rememberReorderableLazyListState(
         lazyListState = lazyListState,
         onMove = { from, to ->
             onReorder(from.index, to.index)
@@ -1238,20 +1244,20 @@ private fun SelectedPlacesList(
             Divider()
 
             // 드래그 가능한 리스트
-            androidx.compose.foundation.lazy.LazyColumn(
+            LazyColumn(
                 state = lazyListState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .sh.calvin.reorderable.reorderable(state)
+                    .reorderable(state)
             ) {
-                androidx.compose.foundation.lazy.itemsIndexed(selectedPlaces, key = { _, place -> place.id }) { index, place ->
-                    sh.calvin.reorderable.ReorderableItem(state, key = place.id) { isDragging ->
+                itemsIndexed(selectedPlaces, key = { _, place -> place.id }) { index, place ->
+                    ReorderableItem(state, key = place.id) { isDragging ->
                         DraggablePlace(
                             place = place,
                             index = index,
                             isDragging = isDragging,
                             onRemove = { onRemove(place) },
-                            dragModifier = Modifier.sh.calvin.reorderable.draggableHandle()
+                            dragModifier = Modifier.draggableHandle()
                         )
                     }
                 }
