@@ -141,9 +141,9 @@ class MainActivity : ComponentActivity() {
 
                             if (savedRoute != null) {
                                 // SavedRoute를 RecommendationResult로 변환
-                                // ✅ allRecommendedPlaces 사용하여 모든 추천 장소 표시
+                                // ✅ allRecommendedPlaces가 있으면 모든 추천 장소 표시, 없으면 선택된 장소만 표시 (하위 호환)
                                 val tempRec = RecommendationResult(
-                                    places = savedRoute.allRecommendedPlaces,
+                                    places = savedRoute.allRecommendedPlaces.ifEmpty { savedRoute.selectedPlaces },
                                     weather = null,
                                     gptReasons = savedRoute.gptReasons,
                                     aiTopIds = savedRoute.aiTopIds,
