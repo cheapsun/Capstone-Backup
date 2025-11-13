@@ -498,8 +498,7 @@ fun ResultScreen(
 
         // 🔹 선택된 장소 목록 (개별 카드들 - 드래그 불가능하지만 제거는 가능)
         if (selectedOrder.isNotEmpty()) {
-            items(selectedPlaces, key = { it.id }) { place ->
-                val index = selectedPlaces.indexOf(place)
+            itemsIndexed(selectedPlaces, key = { index, _ -> selectedOrder[index] }) { index, place ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
