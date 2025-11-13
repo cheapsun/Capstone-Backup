@@ -6,7 +6,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed as foundationItemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -156,7 +156,7 @@ fun RouteDetailScreen(
                 }
             } else {
                 // 일반 모드: 타임라인 뷰
-                itemsIndexed(route!!.places, key = { _, place -> place.id }) { index, place ->
+                foundationItemsIndexed(route!!.places, key = { _, place -> place.id }) { index, place ->
                     PlaceItemCard(
                         place = place,
                         index = index,
@@ -391,6 +391,12 @@ private fun EditablePlacesList(
     places: List<Place>,
     onReorder: (Int, Int) -> Unit
 ) {
+    val state = sh.calvin.reorderable.rememberReorderableLazyListState(
+        onMove = { from, to ->
+            onReorder(from.index, to.index)
+        }
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -411,19 +417,21 @@ private fun EditablePlacesList(
             HorizontalDivider()
 
             // 드래그 가능한 리스트
-            sh.calvin.reorderable.ReorderableColumn(
-                list = places,
-                onSettle = { fromIndex, toIndex ->
-                    onReorder(fromIndex, toIndex)
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) { index, place, isDragging ->
-                key(place.id) {
-                    EditablePlaceItem(
-                        place = place,
-                        index = index,
-                        isDragging = isDragging
-                    )
+            androidx.compose.foundation.lazy.LazyColumn(
+                state = state.listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .sh.calvin.reorderable.reorderable(state)
+            ) {
+                androidx.compose.foundation.lazy.itemsIndexed(places, key = { _, place -> place.id }) { index, place ->
+                    sh.calvin.reorderable.ReorderableItem(state, key = place.id) { isDragging ->
+                        EditablePlaceItem(
+                            place = place,
+                            index = index,
+                            isDragging = isDragging,
+                            dragModifier = Modifier.sh.calvin.reorderable.draggableHandle()
+                        )
+                    }
                 }
             }
 
@@ -450,7 +458,8 @@ private fun EditablePlacesList(
 private fun EditablePlaceItem(
     place: Place,
     index: Int,
-    isDragging: Boolean
+    isDragging: Boolean,
+    dragModifier: Modifier = Modifier
 ) {
     Surface(
         modifier = Modifier
@@ -476,7 +485,7 @@ private fun EditablePlaceItem(
                 imageVector = Icons.Default.DragHandle,
                 contentDescription = "드래그",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
+                modifier = dragModifier.size(24.dp)
             )
 
             // 순서 번호

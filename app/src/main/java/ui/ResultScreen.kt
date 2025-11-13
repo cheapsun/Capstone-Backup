@@ -1191,6 +1191,12 @@ private fun SelectedPlacesList(
     onReorder: (Int, Int) -> Unit,
     onRemove: (Place) -> Unit
 ) {
+    val state = sh.calvin.reorderable.rememberReorderableLazyListState(
+        onMove = { from, to ->
+            onReorder(from.index, to.index)
+        }
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1230,20 +1236,22 @@ private fun SelectedPlacesList(
             Divider()
 
             // 드래그 가능한 리스트
-            sh.calvin.reorderable.ReorderableColumn(
-                list = selectedPlaces,
-                onSettle = { fromIndex, toIndex ->
-                    onReorder(fromIndex, toIndex)
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) { index, place, isDragging ->
-                key(place.id) {
-                    DraggablePlace(
-                        place = place,
-                        index = index,
-                        isDragging = isDragging,
-                        onRemove = { onRemove(place) }
-                    )
+            androidx.compose.foundation.lazy.LazyColumn(
+                state = state.listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .sh.calvin.reorderable.reorderable(state)
+            ) {
+                androidx.compose.foundation.lazy.itemsIndexed(selectedPlaces, key = { _, place -> place.id }) { index, place ->
+                    sh.calvin.reorderable.ReorderableItem(state, key = place.id) { isDragging ->
+                        DraggablePlace(
+                            place = place,
+                            index = index,
+                            isDragging = isDragging,
+                            onRemove = { onRemove(place) },
+                            dragModifier = Modifier.sh.calvin.reorderable.draggableHandle()
+                        )
+                    }
                 }
             }
 
@@ -1271,7 +1279,8 @@ private fun DraggablePlace(
     place: Place,
     index: Int,
     isDragging: Boolean,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    dragModifier: Modifier = Modifier
 ) {
     Surface(
         modifier = Modifier
@@ -1297,7 +1306,7 @@ private fun DraggablePlace(
                 imageVector = Icons.Default.DragHandle,
                 contentDescription = "드래그",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
+                modifier = dragModifier.size(24.dp)
             )
 
             // 순서 번호
