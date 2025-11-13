@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -1257,112 +1258,270 @@ private fun RouteSegmentsList(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "경로 구간 보기",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.DirectionsWalk,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        "경로 구간 보기",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Text(
                     if (expanded) "▲" else "▼",
                     style = MaterialTheme.typography.titleMedium
                 )
             }
 
-            // 구간 리스트 (펼쳤을 때만 표시)
+            // 타임라인 리스트 (펼쳤을 때만 표시)
             if (expanded) {
                 Divider()
-                
-                segments.forEachIndexed { index, segment ->
-                    val isHighlighted = highlightedIndex == index
-                    
-                    // 구간 색상
-                    val colors = listOf(
-                        ComposeColor(0xFF4285F4),   // 파란색
-                        ComposeColor(0xFFEA4335),   // 빨간색
-                        ComposeColor(0xFFFBBC05),   // 노란색
-                        ComposeColor(0xFF34A853),   // 초록색
-                        ComposeColor(0xFF9C27B0),   // 보라색
-                        ComposeColor(0xFFFF6D00),   // 주황색
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    // 시작점
+                    TimelinePlace(
+                        place = selectedPlaces.firstOrNull(),
+                        index = 0,
+                        isFirst = true,
+                        isLast = false
                     )
-                    val segmentColor = colors[index % colors.size]
 
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSegmentClick(index) },
-                        color = if (isHighlighted) {
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                        } else {
-                            ComposeColor.Transparent
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // 구간 색상 표시
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp, 40.dp)
-                                    .background(segmentColor, MaterialTheme.shapes.small)
-                            )
+                    // 각 구간과 도착지
+                    segments.forEachIndexed { index, segment ->
+                        val isHighlighted = highlightedIndex == index
 
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    "${segment.from.name} → ${segment.to.name}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Normal
-                                )
-                                
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Text(
-                                        "도보 ${segment.durationSeconds / 60}분",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        if (segment.distanceMeters >= 1000) {
-                                            "%.1f km".format(segment.distanceMeters / 1000.0)
-                                        } else {
-                                            "${segment.distanceMeters} m"
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
+                        // 구간 색상
+                        val colors = listOf(
+                            ComposeColor(0xFF4285F4),   // 파란색
+                            ComposeColor(0xFFEA4335),   // 빨간색
+                            ComposeColor(0xFFFBBC05),   // 노란색
+                            ComposeColor(0xFF34A853),   // 초록색
+                            ComposeColor(0xFF9C27B0),   // 보라색
+                            ComposeColor(0xFFFF6D00),   // 주황색
+                        )
+                        val segmentColor = colors[index % colors.size]
 
-                            // 하이라이트 표시
-                            if (isHighlighted) {
-                                Text(
-                                    "✓",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
+                        // 이동 구간
+                        TimelineSegment(
+                            segment = segment,
+                            segmentColor = segmentColor,
+                            isHighlighted = isHighlighted,
+                            onClick = { onSegmentClick(index) }
+                        )
 
-                    if (index < segments.size - 1) {
-                        Divider(modifier = Modifier.padding(horizontal = 16.dp))
+                        // 도착 장소
+                        TimelinePlace(
+                            place = selectedPlaces.getOrNull(index + 1),
+                            index = index + 1,
+                            isFirst = false,
+                            isLast = index == segments.size - 1
+                        )
                     }
                 }
 
                 // 힌트 텍스트
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "💡 구간을 탭하면 지도에서 해당 경로가 강조됩니다",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 타임라인 장소 노드
+ */
+@Composable
+private fun TimelinePlace(
+    place: Place?,
+    index: Int,
+    isFirst: Boolean,
+    isLast: Boolean
+) {
+    if (place == null) return
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 순서 번호
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(
+                    if (isFirst) MaterialTheme.colorScheme.tertiary
+                    else if (isLast) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "${index + 1}",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = ComposeColor.White
+            )
+        }
+
+        // 장소명
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                place.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold
+            )
+            if (isFirst) {
                 Text(
-                    "구간을 탭하면 지도에서 해당 경로가 강조됩니다",
+                    "출발",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(16.dp)
+                    color = MaterialTheme.colorScheme.tertiary
                 )
+            } else if (isLast) {
+                Text(
+                    "도착",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 타임라인 이동 구간
+ */
+@Composable
+private fun TimelineSegment(
+    segment: RouteSegment,
+    segmentColor: ComposeColor,
+    isHighlighted: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // 왼쪽: 세로 라인 + 도보 아이콘
+        Box(
+            modifier = Modifier.width(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // 세로 라인
+            Box(
+                modifier = Modifier
+                    .width(if (isHighlighted) 4.dp else 2.dp)
+                    .height(60.dp)
+                    .background(
+                        if (isHighlighted) segmentColor else segmentColor.copy(alpha = 0.3f)
+                    )
+            )
+
+            // 도보 아이콘
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(
+                        if (isHighlighted) segmentColor.copy(alpha = 0.2f)
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.DirectionsWalk,
+                    contentDescription = null,
+                    tint = if (isHighlighted) segmentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        // 오른쪽: 이동 정보
+        Surface(
+            modifier = Modifier
+                .weight(1f)
+                .padding(vertical = 12.dp),
+            color = if (isHighlighted) {
+                segmentColor.copy(alpha = 0.1f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            },
+            shape = MaterialTheme.shapes.small
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        "도보 이동",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isHighlighted) segmentColor else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "약 ${segment.durationSeconds / 60}분",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isHighlighted) segmentColor else MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "•",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            if (segment.distanceMeters >= 1000) {
+                                "%.1f km".format(segment.distanceMeters / 1000.0)
+                            } else {
+                                "${segment.distanceMeters} m"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isHighlighted) segmentColor else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                if (isHighlighted) {
+                    Icon(
+                        imageVector = Icons.Default.MyLocation,
+                        contentDescription = null,
+                        tint = segmentColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }

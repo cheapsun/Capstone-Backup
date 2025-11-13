@@ -6,13 +6,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -159,129 +162,152 @@ private fun PlaceItemCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 24.dp)
     ) {
-        Card(
+        // 🔹 장소 (타임라인 노드)
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(
+            // 왼쪽: 순서 번호 원
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
             ) {
-                // 순서 번호 (파란색 배경)
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.shapes.medium
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
+                Text(
+                    "${index + 1}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+
+            // 오른쪽: 장소 정보
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    place.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                if (!place.address.isNullOrBlank()) {
                     Text(
-                        "${index + 1}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        place.address!!,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                // 장소 정보
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                // 네이버 링크
+                TextButton(
+                    onClick = {
+                        val query = URLEncoder.encode(place.name, "UTF-8")
+                        val url = "https://m.search.naver.com/search.naver?query=$query"
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        context.startActivity(intent)
+                    },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.height(36.dp)
                 ) {
                     Text(
-                        place.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        "네이버에서 보기",
+                        style = MaterialTheme.typography.labelLarge
                     )
-
-                    // 네이버 링크
-                    TextButton(
-                        onClick = {
-                            val query = URLEncoder.encode(place.name, "UTF-8")
-                            val url = "https://m.search.naver.com/search.naver?query=$query"
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                            context.startActivity(intent)
-                        },
-                        contentPadding = PaddingValues(0.dp),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Text(
-                            "네이버에서 보기",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
                 }
             }
         }
 
-        // 다음 장소로의 이동 정보 (마지막 아이템 제외)
+        // 🔹 이동 구간 (세로 라인 + 도보 정보)
         if (!isLast && nextSegment != null) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 56.dp, top = 4.dp, bottom = 4.dp)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        MaterialTheme.shapes.small
-                    )
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 아이콘 박스 (왼쪽 강조)
+                // 왼쪽: 세로 라인 + 도보 아이콘
                 Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                            MaterialTheme.shapes.small
-                        ),
+                    modifier = Modifier.width(48.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Default.ArrowForward,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+                    // 세로 라인
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .height(80.dp)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                     )
+
+                    // 도보 아이콘 (중앙)
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.DirectionsWalk,
+                            contentDescription = "도보",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
 
-                // 도보 정보
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // 오른쪽: 도보 정보
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 20.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = MaterialTheme.shapes.medium
                 ) {
-                    Text(
-                        "도보 ${nextSegment.durationSeconds / 60}분",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Text(
-                        "•",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Text(
-                        if (nextSegment.distanceMeters >= 1000) {
-                            "%.1f km".format(nextSegment.distanceMeters / 1000.0)
-                        } else {
-                            "${nextSegment.distanceMeters} m"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            "도보 이동",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "약 ${nextSegment.durationSeconds / 60}분",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                "•",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                if (nextSegment.distanceMeters >= 1000) {
+                                    "%.1f km".format(nextSegment.distanceMeters / 1000.0)
+                                } else {
+                                    "${nextSegment.distanceMeters} m"
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
             }
         }
