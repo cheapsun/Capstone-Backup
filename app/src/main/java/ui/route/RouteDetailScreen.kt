@@ -389,6 +389,7 @@ private fun PlaceItemCard(
 /**
  * 편집 모드 드래그 가능한 장소 리스트
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun EditablePlacesList(
     places: List<Place>,

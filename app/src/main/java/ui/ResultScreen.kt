@@ -1188,6 +1188,7 @@ private fun clearRoutePolyline(map: KakaoMap) {
 /**
  * 🔹 선택된 장소 드래그 리스트
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun SelectedPlacesList(
     selectedPlaces: List<Place>,
