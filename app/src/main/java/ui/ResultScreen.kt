@@ -498,7 +498,7 @@ fun ResultScreen(
 
         // 🔹 선택된 장소 목록 (개별 카드들 - 드래그 불가능하지만 제거는 가능)
         if (selectedOrder.isNotEmpty()) {
-            itemsIndexed(selectedPlaces, key = { index, _ -> selectedOrder[index] }) { index, place ->
+            itemsIndexed(selectedPlaces, key = { index, _ -> "selected_place_$index" }) { index, place ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -584,7 +584,7 @@ fun ResultScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
-                    items(rec.topPicks, key = { it.id }) { p ->
+                    items(rec.topPicks, key = { "top_${it.id}" }) { p ->
                         TopPickCard(
                             p = p,
                             reason = rec.gptReasons[p.id],
@@ -610,7 +610,7 @@ fun ResultScreen(
         }
 
         // 추천 장소 리스트
-        items(rec.places, key = { it.id }) { p ->
+        items(rec.places, key = { "place_${it.id}" }) { p ->
             PlaceRow(
                 p = p,
                 reason = rec.gptReasons[p.id],
