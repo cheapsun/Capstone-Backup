@@ -219,20 +219,25 @@ fun ResultScreen(
 
     // 🔹 LaunchedEffect로 마커 + 경로 동적 업데이트 (Capstone-Backup 방식 - 단일 Effect)
     LaunchedEffect(kakaoMap, selectedOrder.toList(), rec.places, showRealRoute, routeSegments, highlightedSegmentIndex, expandedPlacesList) {
-        val map = kakaoMap ?: return@LaunchedEffect
-        val labelManager = map.labelManager ?: return@LaunchedEffect
-        val routeLineManager = map.routeLineManager ?: return@LaunchedEffect
+        try {
+            val map = kakaoMap ?: return@LaunchedEffect
+            val labelManager = map.labelManager ?: return@LaunchedEffect
+            val routeLineManager = map.routeLineManager ?: return@LaunchedEffect
 
-        // 내 위치 마커 임시 저장
-        val savedMyLocationLabel = myLocationLabel
-        val savedMyLocationLatLng = myLocationLatLng
+            // 내 위치 마커 임시 저장
+            val savedMyLocationLabel = myLocationLabel
+            val savedMyLocationLatLng = myLocationLatLng
 
-        // 기존 마커 및 경로선 모두 제거
-        labelManager.layer?.removeAll()
-        routeLineManager.layer?.removeAll()
-        labelPlaceMap.clear()
+            // 기존 마커 및 경로선 모두 제거
+            try {
+                labelManager.layer?.removeAll()
+                routeLineManager.layer?.removeAll()
+                labelPlaceMap.clear()
+            } catch (e: Exception) {
+                Log.e("UI", "❌ 마커/경로선 제거 실패: ${e.message}", e)
+            }
 
-        Log.d("UI", "LaunchedEffect: Adding markers (expandedPlacesList=$expandedPlacesList)")
+            Log.d("UI", "LaunchedEffect: Adding markers (expandedPlacesList=$expandedPlacesList)")
 
         // 텍스트 스타일
         val textStyle = LabelStyles.from(
@@ -267,36 +272,40 @@ fun ResultScreen(
             selectedPlaces
         }
 
-        placesToShow.forEach { place ->
-            val selectedIndex = selectedOrder.indexOfFirst { it == place.id }
-            val isSelected = selectedIndex != -1
-            val isTopPick = topIds.contains(place.id)
+        try {
+            placesToShow.forEach { place ->
+                val selectedIndex = selectedOrder.indexOfFirst { it == place.id }
+                val isSelected = selectedIndex != -1
+                val isTopPick = topIds.contains(place.id)
 
-            val options = LabelOptions.from(LatLng.from(place.lat, place.lng))
-                .setClickable(true)
+                val options = LabelOptions.from(LatLng.from(place.lat, place.lng))
+                    .setClickable(true)
 
-            when {
-                isSelected -> {
-                    // 선택된 장소: 주황색 핀 + 번호
-                    options.setTexts("${selectedIndex + 1}")
-                    options.setStyles(orangePinStyle)
+                when {
+                    isSelected -> {
+                        // 선택된 장소: 주황색 핀 + 번호
+                        options.setTexts("${selectedIndex + 1}")
+                        options.setStyles(orangePinStyle)
+                    }
+                    isTopPick -> {
+                        // Top Pick: 골드색 핀
+                        options.setStyles(starPinStyle)
+                    }
+                    else -> {
+                        // 일반 장소: 파란색 핀
+                        options.setStyles(bluePinStyle)
+                    }
                 }
-                isTopPick -> {
-                    // Top Pick: 골드색 핀
-                    options.setStyles(starPinStyle)
-                }
-                else -> {
-                    // 일반 장소: 파란색 핀
-                    options.setStyles(bluePinStyle)
+
+                labelManager.layer?.addLabel(options)?.let { label ->
+                    labelPlaceMap[label] = place
                 }
             }
 
-            labelManager.layer?.addLabel(options)?.let { label ->
-                labelPlaceMap[label] = place
-            }
+            Log.d("UI", "✅ Markers added: ${labelPlaceMap.size} (showAll=$expandedPlacesList)")
+        } catch (e: Exception) {
+            Log.e("UI", "❌ 마커 추가 실패: ${e.message}", e)
         }
-
-        Log.d("UI", "✅ Markers added: ${labelPlaceMap.size} (showAll=$expandedPlacesList)")
 
         // 🔹 실제 경로 표시 (같은 LaunchedEffect 내에서 처리)
         if (showRealRoute && routeSegments.isNotEmpty()) {
@@ -353,32 +362,51 @@ fun ResultScreen(
 
         // 🔹 내 위치 마커 복원 (removeAll 후 다시 추가)
         if (savedMyLocationLatLng != null && showMyLocation) {
-            val redPinStyle = if (redPinBitmap != null) {
-                LabelStyles.from(LabelStyle.from(redPinBitmap).setAnchorPoint(0.5f, 1.0f))
-            } else {
-                LabelStyles.from(LabelStyle.from())
+            try {
+                val redPinStyle = if (redPinBitmap != null) {
+                    LabelStyles.from(LabelStyle.from(redPinBitmap).setAnchorPoint(0.5f, 1.0f))
+                } else {
+                    LabelStyles.from(LabelStyle.from())
+                }
+
+                val options = LabelOptions.from(savedMyLocationLatLng)
+                    .setStyles(redPinStyle)
+
+                myLocationLabel = labelManager.layer?.addLabel(options)
+                Log.d("UI", "✅ 내 위치 마커 복원")
+            } catch (e: Exception) {
+                Log.e("UI", "❌ 내 위치 마커 복원 실패: ${e.message}", e)
             }
-
-            val options = LabelOptions.from(savedMyLocationLatLng)
-                .setStyles(redPinStyle)
-
-            myLocationLabel = labelManager.layer?.addLabel(options)
-            Log.d("UI", "✅ 내 위치 마커 복원")
+        }
+        } catch (e: Exception) {
+            Log.e("UI", "❌ LaunchedEffect 실패: ${e.message}", e)
         }
     }
 
     val focusOn: (Place) -> Unit = { p ->
-        kakaoMap?.let { map ->
-            map.moveCamera(CameraUpdateFactory.newCenterPosition(LatLng.from(p.lat, p.lng)))
-            highlightedId = p.id
+        try {
+            kakaoMap?.let { map ->
+                val latLng = LatLng.from(p.lat, p.lng)
+                map.moveCamera(CameraUpdateFactory.newCenterPosition(latLng, 15))
+                highlightedId = p.id
+                Log.d("UI", "✅ 카메라 이동: ${p.name}")
+            }
+        } catch (e: Exception) {
+            Log.e("UI", "❌ 카메라 이동 실패: ${e.message}", e)
         }
     }
 
     val toggleSelect: (Place) -> Unit = { p ->
-        if (selectedOrder.contains(p.id)) {
-            selectedOrder.remove(p.id)
-        } else {
-            selectedOrder.add(p.id)
+        try {
+            if (selectedOrder.contains(p.id)) {
+                selectedOrder.remove(p.id)
+                Log.d("UI", "✅ 장소 제거: ${p.name}")
+            } else {
+                selectedOrder.add(p.id)
+                Log.d("UI", "✅ 장소 추가: ${p.name}")
+            }
+        } catch (e: Exception) {
+            Log.e("UI", "❌ 장소 추가/제거 실패: ${e.message}", e)
         }
     }
 
@@ -543,7 +571,11 @@ fun ResultScreen(
                             onView = { focusOn(p) },
                             onToggle = {
                                 toggleSelect(p)
-                                focusOn(p)
+                                // 장소 추가 후 카메라 이동 (딜레이를 주어 LaunchedEffect와 충돌 방지)
+                                scope.launch {
+                                    kotlinx.coroutines.delay(100)
+                                    focusOn(p)
+                                }
                             }
                         )
                     }
@@ -674,7 +706,11 @@ fun ResultScreen(
                 onToggleExpand = { expandedPlacesList = !expandedPlacesList },
                 onPlaceToggle = { place ->
                     toggleSelect(place)
-                    focusOn(place)
+                    // 장소 추가 후 카메라 이동 (딜레이를 주어 LaunchedEffect와 충돌 방지)
+                    scope.launch {
+                        kotlinx.coroutines.delay(100)
+                        focusOn(place)
+                    }
                 }
             )
         }
