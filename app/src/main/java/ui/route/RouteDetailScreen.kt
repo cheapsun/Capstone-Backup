@@ -391,7 +391,9 @@ private fun EditablePlacesList(
     places: List<Place>,
     onReorder: (Int, Int) -> Unit
 ) {
+    val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val state = sh.calvin.reorderable.rememberReorderableLazyListState(
+        lazyListState = lazyListState,
         onMove = { from, to ->
             onReorder(from.index, to.index)
         }
@@ -418,7 +420,7 @@ private fun EditablePlacesList(
 
             // 드래그 가능한 리스트
             androidx.compose.foundation.lazy.LazyColumn(
-                state = state.listState,
+                state = lazyListState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .sh.calvin.reorderable.reorderable(state)
