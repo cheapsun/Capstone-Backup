@@ -250,6 +250,15 @@ fun RouteMapScreen(
                                     },
                                     object : KakaoMapReadyCallback() {
                                         override fun onMapReady(map: KakaoMap) {
+                                            // 🔹 첫 번째 장소로 카메라 이동 (초기 위치 설정)
+                                            route.places.firstOrNull()?.let { firstPlace ->
+                                                map.moveCamera(
+                                                    CameraUpdateFactory.newCenterPosition(
+                                                        LatLng.from(firstPlace.lat, firstPlace.lng),
+                                                        13
+                                                    )
+                                                )
+                                            }
                                             kakaoMap = map
                                         }
                                     }

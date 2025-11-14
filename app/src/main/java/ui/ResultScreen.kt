@@ -297,7 +297,7 @@ fun ResultScreen(
         Log.d("UI", "✅ Markers added: ${labelPlaceMap.size}")
 
         // 🔹 실제 경로 표시 (색상 코딩 + 구간별 포커스)
-        routeLines.values.forEach { routeLineManager.remove(it) }
+        // removeAll()로 이미 제거되었으므로 map만 클리어
         routeLines.clear()
 
         if (showRealRoute && routeSegments.isNotEmpty()) {
@@ -335,10 +335,13 @@ fun ResultScreen(
                         ).setStylesSet(stylesSet)
 
                         val routeLine = routeLineManager.layer?.addRouteLine(options)
-                        routeLine?.show()
-                        routeLine?.let { routeLines[index] = it }
-
-                        Log.d("UI", "경로 ${index + 1}: ${coords.size}개 좌표, 색상=${String.format("#%06X", baseColor and 0xFFFFFF)}, 투명도=$alpha")
+                        if (routeLine != null) {
+                            routeLine.show()
+                            routeLines[index] = routeLine
+                            Log.d("UI", "✅ 경로 ${index + 1}: ${coords.size}개 좌표, 색상=${String.format("#%06X", baseColor and 0xFFFFFF)}, 투명도=$alpha")
+                        } else {
+                            Log.e("UI", "❌ 경로 ${index + 1} 추가 실패: addRouteLine returned null")
+                        }
                     }
                 }
 
