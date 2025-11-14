@@ -647,7 +647,6 @@ private fun WeatherBanner(w: WeatherInfo?) {
 /**
  * 🔹 선택된 장소 섹션 (드래그 가능)
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SelectedPlacesSection(
     selectedPlaces: List<Place>,
