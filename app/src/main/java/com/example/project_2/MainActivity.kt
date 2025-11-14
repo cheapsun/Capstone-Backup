@@ -37,6 +37,7 @@ import com.example.project_2.ui.main.MainViewModel
 import com.example.project_2.ui.result.ResultScreen
 import com.example.project_2.ui.route.RouteDetailScreen
 import com.example.project_2.ui.route.RouteListScreen
+import com.example.project_2.ui.route.RouteMapScreen
 import com.example.project_2.ui.theme.Project2Theme
 import com.kakao.vectormap.KakaoMapSdk
 
@@ -120,11 +121,18 @@ class MainActivity : ComponentActivity() {
                                     navController.popBackStack()
                                 },
                                 onShowOnMap = {
-                                    // 지도 화면으로 이동
-                                    navController.navigate(Screen.Map.route) {
-                                        popUpTo(Screen.Route.route)
-                                        launchSingleTop = true
-                                    }
+                                    // 🔹 RouteMapScreen으로 이동 (저장된 루트 지도 화면)
+                                    navController.navigate("route_map/$routeId")
+                                }
+                            )
+                        }
+
+                        composable("route_map/{routeId}") { backStackEntry ->
+                            val routeId = backStackEntry.arguments?.getString("routeId") ?: return@composable
+                            RouteMapScreen(
+                                routeId = routeId,
+                                onBackClick = {
+                                    navController.popBackStack()
                                 }
                             )
                         }

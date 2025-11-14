@@ -12,20 +12,28 @@ import android.net.Uri
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -125,6 +133,24 @@ fun ResultScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     var routeNameInput by remember { mutableStateOf("") }
 
+    // 🔹 접기/펼치기 및 구간별 포커스 상태
+    var isRouteInfoExpanded by remember { mutableStateOf(true) }
+    var isPlaceListExpanded by remember { mutableStateOf(true) }
+    var selectedSegmentIndex by remember { mutableStateOf<Int?>(null) }
+    val routeLines = remember { mutableStateMapOf<Int, RouteLine>() }
+
+    // 🔹 구간별 색상 정의
+    val segmentColors = remember {
+        listOf(
+            "#4285F4", // 파란색
+            "#34A853", // 초록색
+            "#FBBC04", // 노란색
+            "#EA4335", // 빨간색
+            "#9C27B0", // 보라색
+            "#FF6D00"  // 주황색
+        )
+    }
+
     // 🔹 내 위치 가져오기 및 마커 표시/제거
     LaunchedEffect(showMyLocation, kakaoMap) {
         val map = kakaoMap ?: return@LaunchedEffect
@@ -198,7 +224,7 @@ fun ResultScreen(
     }
 
     // 🔹 LaunchedEffect로 마커 + 경로 동적 업데이트 (Capstone-Backup 방식 - 단일 Effect)
-    LaunchedEffect(kakaoMap, selectedPlaces.toList(), rec.places, showRealRoute, routeSegments) {
+    LaunchedEffect(kakaoMap, selectedPlaces.toList(), rec.places, showRealRoute, routeSegments, selectedSegmentIndex) {
         val map = kakaoMap ?: return@LaunchedEffect
         val labelManager = map.labelManager ?: return@LaunchedEffect
         val routeLineManager = map.routeLineManager ?: return@LaunchedEffect
@@ -270,35 +296,42 @@ fun ResultScreen(
 
         Log.d("UI", "✅ Markers added: ${labelPlaceMap.size}")
 
-        // 🔹 실제 경로 표시 (같은 LaunchedEffect 내에서 처리)
+        // 🔹 실제 경로 표시 (색상 코딩 + 구간별 포커스)
+        routeLines.values.forEach { routeLineManager.remove(it) }
+        routeLines.clear()
+
         if (showRealRoute && routeSegments.isNotEmpty()) {
             try {
-                // 각 구간을 다른 색상으로 표시
-                val colors = listOf(
-                    Color.rgb(66, 133, 244),   // 파란색
-                    Color.rgb(234, 67, 53),    // 빨간색
-                    Color.rgb(251, 188, 5),    // 노란색
-                    Color.rgb(52, 168, 83),    // 초록색
-                    Color.rgb(156, 39, 176),   // 보라색
-                    Color.rgb(255, 109, 0),    // 주황색
-                )
-
                 routeSegments.forEachIndexed { index, segment ->
                     val coords = segment.pathCoordinates
                     if (coords.size >= 2) {
-                        val color = colors[index % colors.size]
+                        val colorHex = segmentColors[index % segmentColors.size]
+                        val color = Color.parseColor(colorHex)
 
+                        // 선택된 구간 여부에 따라 스타일 조정
+                        val isSelected = when (selectedSegmentIndex) {
+                            null -> false // 전체 보기
+                            else -> index == selectedSegmentIndex
+                        }
+
+                        val alpha = when {
+                            selectedSegmentIndex == null -> 0.7f // 전체 보기
+                            isSelected -> 1.0f // 선택된 구간
+                            else -> 0.3f // 선택되지 않은 구간
+                        }
+                        val width = if (isSelected) 10f else 8f
+
+                        val style = RouteLineStyle.from(width, color)
+                            .setStrokeAlpha(alpha)
+
+                        val stylesSet = RouteLineStylesSet.from(style)
                         val options = RouteLineOptions.from(
-                            RouteLineSegment.from(coords)
-                                .setStyles(
-                                    RouteLineStyles.from(
-                                        RouteLineStyle.from(18f, color)
-                                    )
-                                )
-                        )
+                            listOf(RouteLineSegment.from(coords))
+                        ).setStylesSet(stylesSet)
 
                         val routeLine = routeLineManager.layer?.addRouteLine(options)
                         routeLine?.show()
+                        routeLine?.let { routeLines[index] = it }
 
                         Log.d("UI", "경로 ${index + 1}: ${coords.size}개 좌표, 색상=${String.format("#%06X", color and 0xFFFFFF)}")
                     }
@@ -488,7 +521,16 @@ fun ResultScreen(
         // 🔹 경로 정보 (경로가 생성되면 표시)
         if (showRealRoute && routeSegments.isNotEmpty()) {
             item(key = "route_info") {
-                RouteInfoSection(routeSegments)
+                RouteInfoSection(
+                    segments = routeSegments,
+                    isExpanded = isRouteInfoExpanded,
+                    selectedSegmentIndex = selectedSegmentIndex,
+                    segmentColors = segmentColors,
+                    onToggleExpand = { isRouteInfoExpanded = !isRouteInfoExpanded },
+                    onSegmentClick = { index ->
+                        selectedSegmentIndex = if (selectedSegmentIndex == index) null else index
+                    }
+                )
             }
         }
 
@@ -780,111 +822,225 @@ private fun SelectedPlacesSection(
 }
 
 /**
- * 🔹 경로 정보 섹션
+ * 🔹 경로 정보 섹션 (접기/펼치기 + 구간별 클릭)
  */
 @Composable
-private fun RouteInfoSection(segments: List<RouteSegment>) {
+private fun RouteInfoSection(
+    segments: List<RouteSegment>,
+    isExpanded: Boolean,
+    selectedSegmentIndex: Int?,
+    segmentColors: List<String>,
+    onToggleExpand: () -> Unit,
+    onSegmentClick: (Int) -> Unit
+) {
     val totalDistance = segments.sumOf { it.distanceMeters }
     val totalDuration = segments.sumOf { it.durationSeconds }
 
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+    val rotationAngle by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = tween(300), label = "rotation"
+    )
+
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        shape = MaterialTheme.shapes.medium,
-        tonalElevation = 2.dp
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .animateContentSize(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+        )
     ) {
         Column(Modifier.padding(16.dp)) {
+            // 헤더 (클릭 시 접기/펼치기)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleExpand() },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "🚶 보행자 경로",
+                    "🚶 루트 정보 (${segments.size}개 구간)",
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
-                Text(
-                    "${segments.size}개 구간",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                Icon(
+                    Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) "접기" else "펼치기",
+                    modifier = Modifier.rotate(rotationAngle),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                Column {
-                    Text(
-                        "총 거리",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        if (totalDistance >= 1000) {
-                            "%.1f km".format(totalDistance / 1000.0)
-                        } else {
-                            "$totalDistance m"
-                        },
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
-
-                Column {
-                    Text(
-                        "예상 시간",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        formatDuration(totalDuration),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
-            }
-
-            // 구간별 상세 정보
-            if (segments.size > 1) {
+            if (isExpanded) {
                 Spacer(Modifier.height(16.dp))
-                Divider(color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.2f))
-                Spacer(Modifier.height(12.dp))
 
-                Text(
-                    "구간 상세",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                segments.forEachIndexed { index, segment ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                // 총 거리 및 시간
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    Column {
                         Text(
-                            "${index + 1}. ${segment.from.name} → ${segment.to.name}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.weight(1f)
+                            "총 거리",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                         )
                         Text(
-                            "${segment.distanceMeters}m • ${formatDuration(segment.durationSeconds)}",
-                            style = MaterialTheme.typography.bodySmall,
+                            if (totalDistance >= 1000) {
+                                "%.1f km".format(totalDistance / 1000.0)
+                            } else {
+                                "$totalDistance m"
+                            },
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            "예상 시간",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            formatDuration(totalDuration),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+
+                // 구간별 상세 정보 (T-Map 스타일 타임라인)
+                if (segments.isNotEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                    Divider(color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.2f))
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        "구간 상세 (클릭하여 지도에서 확인)",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    segments.forEachIndexed { index, segment ->
+                        SegmentTimelineItem(
+                            index = index,
+                            segment = segment,
+                            color = segmentColors[index % segmentColors.size],
+                            isSelected = selectedSegmentIndex == index,
+                            isLast = index == segments.size - 1,
+                            onClick = { onSegmentClick(index) }
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 🎨 T-Map 스타일 타임라인 구간 아이템
+ */
+@Composable
+private fun SegmentTimelineItem(
+    index: Int,
+    segment: RouteSegment,
+    color: String,
+    isSelected: Boolean,
+    isLast: Boolean,
+    onClick: () -> Unit
+) {
+    val backgroundColor = if (isSelected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .background(backgroundColor, MaterialTheme.shapes.small)
+            .padding(vertical = 8.dp, horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 타임라인 (원 + 세로선)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.width(40.dp)
+        ) {
+            // 원형 번호
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .background(
+                        androidx.compose.ui.graphics.Color(Color.parseColor(color)),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "${index + 1}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = androidx.compose.ui.graphics.Color.White
+                )
+            }
+
+            // 세로 연결선
+            if (!isLast) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .height(40.dp)
+                        .background(androidx.compose.ui.graphics.Color(Color.parseColor(color)).copy(alpha = 0.5f))
+                )
+            }
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        // 구간 정보
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "${segment.from.name} → ${segment.to.name}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    if (segment.distanceMeters >= 1000) {
+                        "%.1f km".format(segment.distanceMeters / 1000.0)
+                    } else {
+                        "${segment.distanceMeters}m"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text("•", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    formatDuration(segment.durationSeconds),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        if (isSelected) {
+            Icon(
+                Icons.Default.KeyboardArrowUp,
+                contentDescription = "선택됨",
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
