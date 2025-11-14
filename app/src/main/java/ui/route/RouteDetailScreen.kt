@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragHandle
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.example.project_2.data.RouteStorage
 import com.example.project_2.data.route.TmapPedestrianService
 import com.example.project_2.domain.model.Place
@@ -55,6 +57,7 @@ fun RouteDetailScreen(
     var isEditMode by remember { mutableStateOf(false) }
     val editablePlaces = remember { mutableStateListOf<Place>().apply { addAll(route.places) } }
     var isSaving by remember { mutableStateOf(false) }
+    var showAddPlaceDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -172,6 +175,24 @@ fun RouteDetailScreen(
                         )
                     }
                 }
+
+                // 🔹 장소 추가 버튼
+                item(key = "add_place_button") {
+                    OutlinedButton(
+                        onClick = { showAddPlaceDialog = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "장소 추가",
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("장소 추가")
+                    }
+                }
             }
         } else {
             // 🔹 일반 모드: 읽기 전용
@@ -199,6 +220,18 @@ fun RouteDetailScreen(
                 }
             }
         }
+    }
+
+    // 🔹 장소 추가 다이얼로그
+    if (showAddPlaceDialog) {
+        AddPlaceDialog(
+            onDismiss = { showAddPlaceDialog = false },
+            onAdd = { place ->
+                editablePlaces.add(place)
+                showAddPlaceDialog = false
+                Toast.makeText(context, "장소가 추가되었습니다", Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 }
 
@@ -478,6 +511,126 @@ private fun EditablePlaceItemCard(
                         contentDescription = "제거",
                         tint = MaterialTheme.colorScheme.error
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 🔹 장소 추가 다이얼로그
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddPlaceDialog(
+    onDismiss: () -> Unit,
+    onAdd: (Place) -> Unit
+) {
+    var placeName by remember { mutableStateOf("") }
+    var placeAddress by remember { mutableStateOf("") }
+    var latitude by remember { mutableStateOf("") }
+    var longitude by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    "장소 추가",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                OutlinedTextField(
+                    value = placeName,
+                    onValueChange = { placeName = it },
+                    label = { Text("장소 이름") },
+                    placeholder = { Text("예: 카페") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = placeAddress,
+                    onValueChange = { placeAddress = it },
+                    label = { Text("주소 (선택사항)") },
+                    placeholder = { Text("예: 서울시 강남구...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = latitude,
+                        onValueChange = { latitude = it },
+                        label = { Text("위도") },
+                        placeholder = { Text("37.1234") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = longitude,
+                        onValueChange = { longitude = it },
+                        label = { Text("경도") },
+                        placeholder = { Text("127.1234") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                Text(
+                    "위도/경도는 네이버 지도나 카카오맵에서 확인할 수 있습니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("취소")
+                    }
+
+                    Button(
+                        onClick = {
+                            val lat = latitude.toDoubleOrNull()
+                            val lng = longitude.toDoubleOrNull()
+
+                            if (placeName.isNotBlank() && lat != null && lng != null) {
+                                val newPlace = Place(
+                                    id = System.currentTimeMillis().toString(),
+                                    name = placeName,
+                                    category = "사용자 추가",
+                                    lat = lat,
+                                    lng = lng,
+                                    address = placeAddress.ifBlank { null },
+                                    rating = null
+                                )
+                                onAdd(newPlace)
+                            }
+                        },
+                        enabled = placeName.isNotBlank() &&
+                                  latitude.toDoubleOrNull() != null &&
+                                  longitude.toDoubleOrNull() != null,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("추가")
+                    }
                 }
             }
         }
