@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.project_2.data.RouteStorage
 import com.example.project_2.data.route.TmapPedestrianService
+import com.example.project_2.domain.model.Category
 import com.example.project_2.domain.model.Place
 import com.example.project_2.domain.model.SavedRoute
 import kotlinx.coroutines.launch
@@ -615,7 +616,7 @@ private fun AddPlaceDialog(
                                 val newPlace = Place(
                                     id = System.currentTimeMillis().toString(),
                                     name = placeName,
-                                    category = "사용자 추가",
+                                    category = Category.EXPERIENCE,
                                     lat = lat,
                                     lng = lng,
                                     address = placeAddress.ifBlank { null },
