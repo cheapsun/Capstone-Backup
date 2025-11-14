@@ -69,10 +69,8 @@ fun ResultScreen(
     val labelPlaceMap = remember { mutableMapOf<Label, Place>() }
     var highlightedId by remember { mutableStateOf<String?>(null) }
 
-    val selectedOrder = remember { mutableStateListOf<String>() }
-    val selectedPlaces: List<Place> by remember(selectedOrder, rec.places) {
-        derivedStateOf { selectedOrder.mapNotNull { id -> rec.places.find { it.id == id } } }
-    }
+    // 🔹 선택된 장소 리스트 (드래그 순서 유지를 위해 mutableStateListOf 사용)
+    val selectedPlaces = remember { mutableStateListOf<Place>() }
 
     // 🔹 T-Map 라우팅 상태
     var routeSegments by remember { mutableStateOf<List<RouteSegment>>(emptyList()) }
@@ -87,10 +85,10 @@ fun ResultScreen(
     // 🔹 Reorderable state for drag-and-drop
     val reorderableState = rememberReorderableLazyListState(
         onMove = { from, to ->
-            if (from.index >= 0 && from.index < selectedOrder.size &&
-                to.index >= 0 && to.index <= selectedOrder.size) {
-                val item = selectedOrder.removeAt(from.index)
-                selectedOrder.add(to.index, item)
+            if (from.index >= 0 && from.index < selectedPlaces.size &&
+                to.index >= 0 && to.index <= selectedPlaces.size) {
+                val item = selectedPlaces.removeAt(from.index)
+                selectedPlaces.add(to.index, item)
             }
         }
     )
@@ -200,7 +198,7 @@ fun ResultScreen(
     }
 
     // 🔹 LaunchedEffect로 마커 + 경로 동적 업데이트 (Capstone-Backup 방식 - 단일 Effect)
-    LaunchedEffect(kakaoMap, selectedOrder.toList(), rec.places, showRealRoute, routeSegments) {
+    LaunchedEffect(kakaoMap, selectedPlaces.toList(), rec.places, showRealRoute, routeSegments) {
         val map = kakaoMap ?: return@LaunchedEffect
         val labelManager = map.labelManager ?: return@LaunchedEffect
         val routeLineManager = map.routeLineManager ?: return@LaunchedEffect
@@ -242,7 +240,7 @@ fun ResultScreen(
 
         // 모든 추천 장소에 마커 표시
         rec.places.forEach { place ->
-            val selectedIndex = selectedOrder.indexOfFirst { it == place.id }
+            val selectedIndex = selectedPlaces.indexOfFirst { it.id == place.id }
             val isSelected = selectedIndex != -1
             val isTopPick = topIds.contains(place.id)
 
@@ -336,10 +334,10 @@ fun ResultScreen(
     }
 
     val toggleSelect: (Place) -> Unit = { p ->
-        if (selectedOrder.contains(p.id)) {
-            selectedOrder.remove(p.id)
+        if (selectedPlaces.any { it.id == p.id }) {
+            selectedPlaces.removeAll { it.id == p.id }
         } else {
-            selectedOrder.add(p.id)
+            selectedPlaces.add(p)
         }
     }
 
@@ -476,7 +474,7 @@ fun ResultScreen(
         }
 
         // 🔹 선택된 장소 목록 헤더
-        if (selectedOrder.isNotEmpty()) {
+        if (selectedPlaces.isNotEmpty()) {
             item(key = "selected_places_header") {
                 Card(
                     modifier = Modifier
@@ -511,7 +509,7 @@ fun ResultScreen(
         }
 
         // 🔹 선택된 장소 목록 (드래그로 순서 변경 가능)
-        if (selectedOrder.isNotEmpty()) {
+        if (selectedPlaces.isNotEmpty()) {
             itemsIndexed(selectedPlaces, key = { _, place -> "selected_${place.id}" }) { index, place ->
                 ReorderableItem(reorderableState, key = "selected_${place.id}") { isDragging ->
                     Card(
@@ -576,7 +574,7 @@ fun ResultScreen(
                             // 제거 버튼
                             IconButton(
                                 onClick = {
-                                    selectedOrder.remove(place.id)
+                                    selectedPlaces.remove(place)
                                     routeSegments = emptyList()
                                     showRealRoute = false
                                 },
@@ -623,7 +621,7 @@ fun ResultScreen(
                         TopPickCard(
                             p = p,
                             reason = rec.gptReasons[p.id],
-                            isSelected = selectedOrder.contains(p.id),
+                            isSelected = selectedPlaces.any { it.id == p.id },
                             onView = { focusOn(p) },
                             onToggle = {
                                 toggleSelect(p)
@@ -649,7 +647,7 @@ fun ResultScreen(
             PlaceRow(
                 p = p,
                 reason = rec.gptReasons[p.id],
-                isSelected = selectedOrder.contains(p.id),
+                isSelected = selectedPlaces.any { it.id == p.id },
                 aiMarked = rec.aiTopIds.contains(p.id),
                 catTop = topIds.contains(p.id),
                 regionHint = regionHint,   // ✅ 지역 힌트 넘김
@@ -674,7 +672,7 @@ fun ResultScreen(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            selectedOrder.clear()
+                            selectedPlaces.clear()
                             routeSegments = emptyList()
                             showRealRoute = false
                             // LaunchedEffect가 자동으로 마커 및 경로 업데이트
@@ -684,7 +682,7 @@ fun ResultScreen(
 
                     Button(
                         onClick = { buildRealRoute() },
-                        enabled = selectedOrder.size >= 2 && !isLoadingRoute,
+                        enabled = selectedPlaces.size >= 2 && !isLoadingRoute,
                         modifier = Modifier.weight(2f)
                     ) {
                         if (isLoadingRoute) {
@@ -696,7 +694,7 @@ fun ResultScreen(
                             Spacer(Modifier.width(8.dp))
                             Text("경로 생성 중...")
                         } else {
-                            Text("루트 생성하기 (${selectedOrder.size}개)")
+                            Text("루트 생성하기 (${selectedPlaces.size}개)")
                         }
                     }
                 }
