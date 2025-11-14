@@ -508,8 +508,8 @@ fun ResultScreen(
 
         // 🔹 선택된 장소 목록 (드래그로 순서 변경 가능)
         if (selectedOrder.isNotEmpty()) {
-            itemsIndexed(selectedPlaces, key = { index, _ -> "selected_place_$index" }) { index, place ->
-                ReorderableItem(reorderableState, key = "selected_place_$index") { isDragging ->
+            itemsIndexed(selectedPlaces, key = { _, place -> "selected_${place.id}" }) { index, place ->
+                ReorderableItem(reorderableState, key = "selected_${place.id}") { isDragging ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
