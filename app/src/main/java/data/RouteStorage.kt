@@ -33,11 +33,20 @@ class RouteStorage private constructor(context: Context) {
     }
 
     /**
-     * 루트 저장하기
+     * 루트 저장하기 (같은 ID가 있으면 업데이트, 없으면 추가)
      */
     fun saveRoute(route: SavedRoute) {
         val routes = getAllRoutes().toMutableList()
-        routes.add(route)
+        val existingIndex = routes.indexOfFirst { it.id == route.id }
+
+        if (existingIndex != -1) {
+            // 기존 루트 업데이트
+            routes[existingIndex] = route
+        } else {
+            // 새 루트 추가
+            routes.add(route)
+        }
+
         val json = SavedRoute.toJson(routes)
         prefs.edit().putString(KEY_ROUTES, json).apply()
     }
