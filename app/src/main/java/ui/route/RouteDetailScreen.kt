@@ -1,11 +1,13 @@
 package com.example.project_2.ui.route
 
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -52,6 +54,18 @@ fun RouteDetailScreen(
             Text("루트를 찾을 수 없습니다")
         }
         return
+    }
+
+    // 🔹 구간별 색상 정의
+    val segmentColors = remember {
+        listOf(
+            "#4285F4", // 파란색
+            "#34A853", // 초록색
+            "#FBBC04", // 노란색
+            "#EA4335", // 빨간색
+            "#9C27B0", // 보라색
+            "#FF6D00"  // 주황색
+        )
     }
 
     // 🔹 편집 모드 상태
@@ -166,6 +180,7 @@ fun RouteDetailScreen(
                     EditablePlacesSection(
                         editablePlaces = editablePlaces,
                         reorderableState = reorderableState,
+                        segmentColors = segmentColors,
                         onRemove = { place ->
                             if (editablePlaces.size > 2) {
                                 editablePlaces.remove(place)
@@ -194,6 +209,7 @@ fun RouteDetailScreen(
                     PlaceItemCard(
                         place = place,
                         index = index,
+                        color = segmentColors[index % segmentColors.size],
                         isLast = index == route!!.places.size - 1,
                         nextSegment = if (index < route!!.routeSegments.size) {
                             route!!.routeSegments[index]
@@ -253,123 +269,131 @@ private fun RouteHeader(route: SavedRoute) {
     }
 }
 
+/**
+ * 🎨 장소 타임라인 아이템
+ */
 @Composable
 private fun PlaceItemCard(
     place: Place,
     index: Int,
+    color: String,
     isLast: Boolean,
     nextSegment: com.example.project_2.domain.model.RouteSegment?
 ) {
     val context = LocalContext.current
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        // 타임라인 (원 + 세로선)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.width(40.dp)
         ) {
-            Row(
+            // 원형 번호
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .size(32.dp)
+                    .background(
+                        androidx.compose.ui.graphics.Color(Color.parseColor(color)),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                // 순서 번호 (파란색 배경)
+                Text(
+                    "${index + 1}",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = androidx.compose.ui.graphics.Color.White
+                )
+            }
+
+            // 세로 연결선
+            if (!isLast && nextSegment != null) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.shapes.medium
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "${index + 1}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-
-                // 장소 정보
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        place.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    // 네이버 링크
-                    TextButton(
-                        onClick = {
-                            val query = URLEncoder.encode(place.name, "UTF-8")
-                            val url = "https://m.search.naver.com/search.naver?query=$query"
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                            context.startActivity(intent)
-                        },
-                        contentPadding = PaddingValues(0.dp),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Text(
-                            "네이버에서 보기",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
+                        .width(2.dp)
+                        .height(60.dp)
+                        .background(androidx.compose.ui.graphics.Color(Color.parseColor(color)).copy(alpha = 0.5f))
+                )
             }
         }
 
-        // 다음 장소로의 이동 정보 (마지막 아이템 제외)
-        if (!isLast && nextSegment != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 56.dp, top = 4.dp, bottom = 4.dp)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        MaterialTheme.shapes.small
-                    )
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Spacer(Modifier.width(12.dp))
+
+        // 장소 정보
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                place.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold
+            )
+
+            // 주소
+            if (!place.address.isNullOrBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    place.address,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // 네이버 링크
+            TextButton(
+                onClick = {
+                    val query = URLEncoder.encode(place.name, "UTF-8")
+                    val url = "https://m.search.naver.com/search.naver?query=$query"
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    context.startActivity(intent)
+                },
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.height(32.dp)
             ) {
-                Icon(
-                    Icons.Default.ArrowForward,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
-                )
-
                 Text(
-                    "도보 ${nextSegment.durationSeconds / 60}분",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "네이버에서 보기",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
                 )
+            }
 
-                Text(
-                    "•",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
-                    if (nextSegment.distanceMeters >= 1000) {
-                        "%.1f km".format(nextSegment.distanceMeters / 1000.0)
-                    } else {
-                        "${nextSegment.distanceMeters} m"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            // 다음 구간 정보
+            if (!isLast && nextSegment != null) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            MaterialTheme.shapes.small
+                        )
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "↓",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        if (nextSegment.distanceMeters >= 1000) {
+                            "%.1f km".format(nextSegment.distanceMeters / 1000.0)
+                        } else {
+                            "${nextSegment.distanceMeters}m"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text("•", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "${nextSegment.durationSeconds / 60}분",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
@@ -382,106 +406,97 @@ private fun PlaceItemCard(
 private fun EditablePlaceItemCard(
     place: Place,
     index: Int,
+    color: String,
     isDragging: Boolean,
     reorderableState: ReorderableLazyListState,
     onRemove: () -> Unit
 ) {
     val context = LocalContext.current
 
-    Column(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isDragging) 8.dp else 2.dp
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDragging) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        )
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = if (isDragging) 8.dp else 2.dp
-            ),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isDragging) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surface
-                }
-            )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
+            // 드래그 핸들
+            Icon(
+                imageVector = Icons.Default.DragHandle,
+                contentDescription = "드래그",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .size(24.dp)
+                    .detectReorderAfterLongPress(reorderableState)
+            )
+
+            // 순서 번호 (원형)
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(
+                        androidx.compose.ui.graphics.Color(Color.parseColor(color)),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                // 드래그 핸들
-                Icon(
-                    imageVector = Icons.Default.DragHandle,
-                    contentDescription = "드래그",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(24.dp)
-                        .detectReorderAfterLongPress(reorderableState)
+                Text(
+                    "${index + 1}",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = androidx.compose.ui.graphics.Color.White
+                )
+            }
+
+            // 장소 정보
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    place.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
                 )
 
-                // 순서 번호
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.shapes.medium
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
+                // 주소
+                if (!place.address.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
                     Text(
-                        "${index + 1}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        place.address,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
                     )
                 }
+            }
 
-                // 장소 정보
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        place.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    // 네이버 링크
-                    TextButton(
-                        onClick = {
-                            val query = URLEncoder.encode(place.name, "UTF-8")
-                            val url = "https://m.search.naver.com/search.naver?query=$query"
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                            context.startActivity(intent)
-                        },
-                        contentPadding = PaddingValues(0.dp),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Text(
-                            "네이버에서 보기",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-
-                // 제거 버튼
-                IconButton(
-                    onClick = onRemove,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "제거",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
+            // 제거 버튼
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "제거",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }
@@ -494,6 +509,7 @@ private fun EditablePlaceItemCard(
 private fun EditablePlacesSection(
     editablePlaces: List<Place>,
     reorderableState: ReorderableLazyListState,
+    segmentColors: List<String>,
     onRemove: (Place) -> Unit
 ) {
     Column(
@@ -546,6 +562,7 @@ private fun EditablePlacesSection(
                     EditablePlaceItemCard(
                         place = place,
                         index = index,
+                        color = segmentColors[index % segmentColors.size],
                         isDragging = isDragging,
                         reorderableState = reorderableState,
                         onRemove = { onRemove(place) }
