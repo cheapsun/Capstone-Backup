@@ -322,7 +322,7 @@ fun ResultScreen(
                         val alpha = when {
                             currentSelectedIndex == null -> 0.7f // 전체 보기
                             isSelected -> 1.0f // 선택된 구간
-                            else -> 0.3f // 선택되지 않은 구간
+                            else -> 0.0f // 선택되지 않은 구간 완전히 숨김 (겹침 방지)
                         }
                         val width = if (isSelected) 10f else 8f
 

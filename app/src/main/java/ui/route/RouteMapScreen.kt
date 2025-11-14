@@ -1,11 +1,15 @@
 package com.example.project_2.ui.route
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.util.Log
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -19,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,7 +50,11 @@ import com.kakao.vectormap.route.RouteLineOptions
 import com.kakao.vectormap.route.RouteLineSegment
 import com.kakao.vectormap.route.RouteLineStyle
 import com.kakao.vectormap.route.RouteLineStyles
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 /**
  * 🗺️ 저장된 루트를 지도에 표시하는 화면
@@ -96,12 +105,107 @@ fun RouteMapScreen(
         )
     }
 
+    // 🔹 내 위치 표시 상태
+    var showMyLocation by remember { mutableStateOf(false) }
+    var myLocationLatLng by remember { mutableStateOf<LatLng?>(null) }
+    var isLoadingLocation by remember { mutableStateOf(false) }
+    var myLocationLabel by remember { mutableStateOf<Label?>(null) }
+
+    // FusedLocationProviderClient
+    val fusedLocationClient = remember {
+        LocationServices.getFusedLocationProviderClient(context)
+    }
+
+    val scope = rememberCoroutineScope()
+
+    // 🔹 내 위치 가져오기 및 마커 표시/제거
+    LaunchedEffect(showMyLocation, kakaoMap) {
+        val map = kakaoMap ?: return@LaunchedEffect
+        val labelManager = map.labelManager ?: return@LaunchedEffect
+
+        if (showMyLocation) {
+            // 권한 확인
+            val hasPermission = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!hasPermission) {
+                Toast.makeText(context, "위치 권한이 필요합니다", Toast.LENGTH_SHORT).show()
+                showMyLocation = false
+                return@LaunchedEffect
+            }
+
+            isLoadingLocation = true
+            try {
+                // 현재 위치 가져오기
+                val location = fusedLocationClient.getCurrentLocation(
+                    Priority.PRIORITY_HIGH_ACCURACY,
+                    null
+                ).await()
+
+                if (location != null) {
+                    val latLng = LatLng.from(location.latitude, location.longitude)
+                    myLocationLatLng = latLng
+
+                    // 기존 내 위치 마커 제거
+                    myLocationLabel?.let { labelManager.layer?.remove(it) }
+
+                    // 빨간색 마커 생성 (크기 조정)
+                    val redBitmap = createNumberedPinBitmap(
+                        context = context,
+                        number = 0,  // "내 위치" 표시
+                        color = "#EA4335",  // 빨간색
+                        alpha = 1.0f,
+                        scale = 1.2f
+                    )
+
+                    val redPinStyle = LabelStyles.from(
+                        LabelStyle.from(redBitmap).setApplyDpScale(false)
+                    )
+
+                    val options = LabelOptions.from(latLng)
+                        .setStyles(redPinStyle)
+
+                    myLocationLabel = labelManager.layer?.addLabel(options)
+
+                    // 카메라 이동 (내 위치 중심으로)
+                    map.moveCamera(
+                        CameraUpdateFactory.newCenterPosition(latLng, 15)
+                    )
+                } else {
+                    Toast.makeText(context, "위치를 가져올 수 없습니다", Toast.LENGTH_SHORT).show()
+                    showMyLocation = false
+                }
+            } catch (e: Exception) {
+                Log.e("RouteMapScreen", "❌ 위치 가져오기 실패: ${e.message}", e)
+                Toast.makeText(context, "위치 가져오기 실패", Toast.LENGTH_SHORT).show()
+                showMyLocation = false
+            } finally {
+                isLoadingLocation = false
+            }
+        } else {
+            // 내 위치 마커 제거
+            myLocationLabel?.let { labelManager.layer?.remove(it) }
+            myLocationLabel = null
+            myLocationLatLng = null
+        }
+    }
+
     // 🔹 지도 및 경로 업데이트
     LaunchedEffect(kakaoMap, selectedSegmentIndex) {
         kakaoMap?.let { map ->
             try {
                 val labelManager = map.labelManager
                 val routeLineManager = map.routeLineManager
+
+                // 내 위치 마커 임시 저장
+                val savedMyLocationLabel = myLocationLabel
+                val savedMyLocationLatLng = myLocationLatLng
 
                 // 기존 라벨 및 경로 제거
                 labelManager?.layer?.removeAll()
@@ -151,7 +255,7 @@ fun RouteMapScreen(
                         val alpha = when {
                             currentSelectedIndex == null -> 0.7f // 전체 보기
                             isSelected -> 1.0f // 선택된 구간
-                            else -> 0.3f // 선택되지 않은 구간
+                            else -> 0.0f // 선택되지 않은 구간 완전히 숨김 (겹침 방지)
                         }
                         val width = if (isSelected) 8f else 6f
 
@@ -203,6 +307,27 @@ fun RouteMapScreen(
                             )
                         )
                     }
+                }
+
+                // 🔹 내 위치 마커 복원 (removeAll 후 다시 추가)
+                if (savedMyLocationLatLng != null && showMyLocation) {
+                    val redBitmap = createNumberedPinBitmap(
+                        context = context,
+                        number = 0,
+                        color = "#EA4335",
+                        alpha = 1.0f,
+                        scale = 1.2f
+                    )
+
+                    val redPinStyle = LabelStyles.from(
+                        LabelStyle.from(redBitmap).setApplyDpScale(false)
+                    )
+
+                    val options = LabelOptions.from(savedMyLocationLatLng)
+                        .setStyles(redPinStyle)
+
+                    myLocationLabel = labelManager?.layer?.addLabel(options)
+                    Log.d("RouteMapScreen", "✅ 내 위치 마커 복원")
                 }
 
             } catch (e: Exception) {
@@ -273,6 +398,41 @@ fun RouteMapScreen(
                         },
                         modifier = Modifier.fillMaxSize()
                     )
+
+                    // 내 위치 버튼
+                    FloatingActionButton(
+                        onClick = {
+                            if (!isLoadingLocation) {
+                                showMyLocation = !showMyLocation
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp),
+                        containerColor = if (showMyLocation) {
+                            MaterialTheme.colorScheme.error // 활성화 시 빨간색
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        }
+                    ) {
+                        if (isLoadingLocation) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.MyLocation,
+                                contentDescription = "내 위치",
+                                tint = if (showMyLocation) {
+                                    MaterialTheme.colorScheme.onError
+                                } else {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                }
+                            )
+                        }
+                    }
                 }
             }
 
