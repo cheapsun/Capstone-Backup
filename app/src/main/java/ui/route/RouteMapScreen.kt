@@ -138,47 +138,52 @@ fun RouteMapScreen(
 
                 // 🔹 경로 라인 추가 (구간별)
                 route.routeSegments.forEachIndexed { index, segment ->
-                    if (segment.path.isNotEmpty()) {
-                        val isSelected = when (selectedSegmentIndex) {
+                    if (segment.pathCoordinates.isNotEmpty()) {
+                        val currentSelectedIndex = selectedSegmentIndex
+                        val isSelected = when (currentSelectedIndex) {
                             null -> false // 전체 보기 시 모두 기본 스타일
-                            else -> index == selectedSegmentIndex
+                            else -> index == currentSelectedIndex
                         }
 
-                        val color = segmentColors[index % segmentColors.size]
+                        val colorHex = segmentColors[index % segmentColors.size]
+                        val baseColor = Color.parseColor(colorHex)
+
                         val alpha = when {
-                            selectedSegmentIndex == null -> 0.7f // 전체 보기
+                            currentSelectedIndex == null -> 0.7f // 전체 보기
                             isSelected -> 1.0f // 선택된 구간
                             else -> 0.3f // 선택되지 않은 구간
                         }
                         val width = if (isSelected) 8 else 6
 
-                        val points = segment.path.map { LatLng.from(it.lat, it.lng) }
+                        // alpha 값을 포함한 color 생성
+                        val red = Color.red(baseColor)
+                        val green = Color.green(baseColor)
+                        val blue = Color.blue(baseColor)
+                        val colorWithAlpha = Color.argb((alpha * 255).toInt(), red, green, blue)
+
+                        val points = segment.pathCoordinates
                         val routeSegment = RouteLineSegment.from(points)
 
-                        val style = RouteLineStyle.from(width, Color.parseColor(color))
-                            .setStrokeAlpha(alpha)
-
+                        val style = RouteLineStyle.from(width, colorWithAlpha)
                         val stylesSet = RouteLineStylesSet.from(style)
                         val options = RouteLineOptions.from(listOf(routeSegment))
                             .setStylesSet(stylesSet)
 
-                        routeLineManager?.addRouteLine(options)?.let { routeLine ->
+                        routeLineManager?.layer?.addRouteLine(options)?.let { routeLine ->
                             routeLines[index] = routeLine
                         }
                     }
                 }
 
                 // 🔹 카메라 위치 조정
-                if (selectedSegmentIndex != null && selectedSegmentIndex!! < route.routeSegments.size) {
+                val currentSelectedIndex = selectedSegmentIndex
+                if (currentSelectedIndex != null && currentSelectedIndex < route.routeSegments.size) {
                     // 선택된 구간에 포커스
-                    val segment = route.routeSegments[selectedSegmentIndex!!]
-                    if (segment.path.isNotEmpty()) {
-                        val center = segment.path[segment.path.size / 2]
+                    val segment = route.routeSegments[currentSelectedIndex]
+                    if (segment.pathCoordinates.isNotEmpty()) {
+                        val center = segment.pathCoordinates[segment.pathCoordinates.size / 2]
                         map.moveCamera(
-                            CameraUpdateFactory.newCenterPosition(
-                                LatLng.from(center.lat, center.lng),
-                                15
-                            )
+                            CameraUpdateFactory.newCenterPosition(center, 15)
                         )
                     }
                 } else {

@@ -306,24 +306,29 @@ fun ResultScreen(
                     val coords = segment.pathCoordinates
                     if (coords.size >= 2) {
                         val colorHex = segmentColors[index % segmentColors.size]
-                        val color = Color.parseColor(colorHex)
+                        val baseColor = Color.parseColor(colorHex)
 
                         // 선택된 구간 여부에 따라 스타일 조정
-                        val isSelected = when (selectedSegmentIndex) {
+                        val currentSelectedIndex = selectedSegmentIndex
+                        val isSelected = when (currentSelectedIndex) {
                             null -> false // 전체 보기
-                            else -> index == selectedSegmentIndex
+                            else -> index == currentSelectedIndex
                         }
 
                         val alpha = when {
-                            selectedSegmentIndex == null -> 0.7f // 전체 보기
+                            currentSelectedIndex == null -> 0.7f // 전체 보기
                             isSelected -> 1.0f // 선택된 구간
                             else -> 0.3f // 선택되지 않은 구간
                         }
                         val width = if (isSelected) 10f else 8f
 
-                        val style = RouteLineStyle.from(width, color)
-                            .setStrokeAlpha(alpha)
+                        // alpha 값을 포함한 color 생성
+                        val red = Color.red(baseColor)
+                        val green = Color.green(baseColor)
+                        val blue = Color.blue(baseColor)
+                        val colorWithAlpha = Color.argb((alpha * 255).toInt(), red, green, blue)
 
+                        val style = RouteLineStyle.from(width, colorWithAlpha)
                         val stylesSet = RouteLineStylesSet.from(style)
                         val options = RouteLineOptions.from(
                             listOf(RouteLineSegment.from(coords))
@@ -333,7 +338,7 @@ fun ResultScreen(
                         routeLine?.show()
                         routeLine?.let { routeLines[index] = it }
 
-                        Log.d("UI", "경로 ${index + 1}: ${coords.size}개 좌표, 색상=${String.format("#%06X", color and 0xFFFFFF)}")
+                        Log.d("UI", "경로 ${index + 1}: ${coords.size}개 좌표, 색상=${String.format("#%06X", baseColor and 0xFFFFFF)}, 투명도=$alpha")
                     }
                 }
 
