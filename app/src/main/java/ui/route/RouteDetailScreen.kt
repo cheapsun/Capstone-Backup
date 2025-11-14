@@ -161,6 +161,7 @@ fun RouteDetailScreen(
                             place = place,
                             index = index,
                             isDragging = isDragging,
+                            reorderableState = reorderableState,
                             onRemove = {
                                 if (editablePlaces.size > 2) {
                                     editablePlaces.remove(place)
@@ -379,6 +380,7 @@ private fun EditablePlaceItemCard(
     place: Place,
     index: Int,
     isDragging: Boolean,
+    reorderableState: ReorderableLazyListState,
     onRemove: () -> Unit
 ) {
     val context = LocalContext.current
@@ -413,7 +415,9 @@ private fun EditablePlaceItemCard(
                     imageVector = Icons.Default.DragHandle,
                     contentDescription = "드래그",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier
+                        .size(24.dp)
+                        .detectReorderAfterLongPress(reorderableState)
                 )
 
                 // 순서 번호

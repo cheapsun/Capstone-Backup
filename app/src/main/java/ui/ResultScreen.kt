@@ -84,6 +84,13 @@ fun ResultScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    // 🔹 Reorderable state for drag-and-drop
+    val reorderableState = rememberReorderableLazyListState(
+        onMove = { from, to ->
+            selectedOrder.add(to.index, selectedOrder.removeAt(from.index))
+        }
+    )
+
     // 🔹 커스텀 핀 비트맵 생성 (Capstone-Backup 방식)
     val bluePinBitmap = remember {
         createPinBitmap(context, "#4285F4") // 파란색 (일반 장소)
@@ -366,7 +373,10 @@ fun ResultScreen(
 
     // 전체 스크롤
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        state = reorderableState.listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .reorderable(reorderableState),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
@@ -496,64 +506,85 @@ fun ResultScreen(
             }
         }
 
-        // 🔹 선택된 장소 목록 (개별 카드들 - 드래그 불가능하지만 제거는 가능)
+        // 🔹 선택된 장소 목록 (드래그로 순서 변경 가능)
         if (selectedOrder.isNotEmpty()) {
             itemsIndexed(selectedPlaces, key = { index, _ -> "selected_place_$index" }) { index, place ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Row(
+                ReorderableItem(reorderableState, key = "selected_place_$index") { isDragging ->
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // 순서 번호
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.shapes.small
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "${index + 1}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-
-                        // 장소 이름
-                        Text(
-                            place.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = if (isDragging) 8.dp else 2.dp
+                        ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isDragging) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surface
+                            }
                         )
-
-                        // 제거 버튼
-                        IconButton(
-                            onClick = {
-                                selectedOrder.remove(place.id)
-                                routeSegments = emptyList()
-                                showRealRoute = false
-                            },
-                            modifier = Modifier.size(32.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // 드래그 핸들
                             Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "제거",
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(20.dp)
+                                imageVector = Icons.Default.DragHandle,
+                                contentDescription = "드래그",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .detectReorderAfterLongPress(reorderableState)
                             )
+
+                            // 순서 번호
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.primary,
+                                        MaterialTheme.shapes.small
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "${index + 1}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+
+                            // 장소 이름
+                            Text(
+                                place.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+
+                            // 제거 버튼
+                            IconButton(
+                                onClick = {
+                                    selectedOrder.remove(place.id)
+                                    routeSegments = emptyList()
+                                    showRealRoute = false
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "제거",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }
