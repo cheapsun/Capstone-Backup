@@ -504,10 +504,7 @@ private fun RouteInfoCard(
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .animateContentSize(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-        )
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(Modifier.padding(16.dp)) {
             // 헤더 (클릭 시 접기/펼치기)
@@ -521,14 +518,12 @@ private fun RouteInfoCard(
                 Text(
                     "🚶 루트 정보 (${route.routeSegments.size}개 구간)",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                    fontWeight = FontWeight.Bold
                 )
                 Icon(
                     Icons.Default.KeyboardArrowDown,
                     contentDescription = if (isExpanded) "접기" else "펼치기",
-                    modifier = Modifier.rotate(rotationAngle),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    modifier = Modifier.rotate(rotationAngle)
                 )
             }
 
@@ -544,13 +539,12 @@ private fun RouteInfoCard(
                         Text(
                             "총 거리",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             route.getTotalDistanceFormatted(),
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            fontWeight = FontWeight.Bold
                         )
                     }
 
@@ -558,30 +552,19 @@ private fun RouteInfoCard(
                         Text(
                             "예상 시간",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             route.getTotalDurationFormatted(),
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                // 구간별 상세 정보 (T-Map 스타일 타임라인)
+                // 구간별 상세 정보
                 if (route.routeSegments.isNotEmpty()) {
                     Spacer(Modifier.height(16.dp))
-                    Divider(color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.2f))
-                    Spacer(Modifier.height(12.dp))
-
-                    Text(
-                        "구간 상세 (클릭하여 지도에서 확인)",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                    )
-
-                    Spacer(Modifier.height(12.dp))
 
                     route.routeSegments.forEachIndexed { index, segment ->
                         SegmentTimelineItem(
@@ -600,7 +583,7 @@ private fun RouteInfoCard(
 }
 
 /**
- * 🎨 T-Map 스타일 타임라인 구간 아이템
+ * 🎨 구간 타임라인 아이템 (클릭 가능)
  */
 @Composable
 private fun SegmentTimelineItem(
@@ -611,24 +594,23 @@ private fun SegmentTimelineItem(
     isLast: Boolean,
     onClick: () -> Unit
 ) {
-    val backgroundColor = if (isSelected) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
-
-    val elevation by animateFloatAsState(
-        targetValue = if (isSelected) 4f else 1f,
-        animationSpec = tween(300), label = "elevation"
-    )
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .background(backgroundColor, MaterialTheme.shapes.small)
-            .padding(vertical = 8.dp, horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .then(
+                if (isSelected) {
+                    Modifier
+                        .background(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                            MaterialTheme.shapes.small
+                        )
+                        .padding(vertical = 4.dp, horizontal = 8.dp)
+                } else {
+                    Modifier.padding(vertical = 4.dp)
+                }
+            ),
+        verticalAlignment = Alignment.Top
     ) {
         // 타임라인 (원 + 세로선)
         Column(
@@ -638,7 +620,7 @@ private fun SegmentTimelineItem(
             // 원형 번호
             Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp)
                     .background(
                         androidx.compose.ui.graphics.Color(Color.parseColor(color)),
                         CircleShape
@@ -647,7 +629,7 @@ private fun SegmentTimelineItem(
             ) {
                 Text(
                     "${index + 1}",
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = androidx.compose.ui.graphics.Color.White
                 )
@@ -658,7 +640,7 @@ private fun SegmentTimelineItem(
                 Box(
                     modifier = Modifier
                         .width(2.dp)
-                        .height(40.dp)
+                        .height(60.dp)
                         .background(androidx.compose.ui.graphics.Color(Color.parseColor(color)).copy(alpha = 0.5f))
                 )
             }
@@ -670,12 +652,20 @@ private fun SegmentTimelineItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 "${segment.from.name} → ${segment.to.name}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        MaterialTheme.shapes.small
+                    )
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     if (segment.distanceMeters >= 1000) {
                         "%.1f km".format(segment.distanceMeters / 1000.0)
@@ -698,7 +688,8 @@ private fun SegmentTimelineItem(
             Icon(
                 Icons.Default.KeyboardArrowUp,
                 contentDescription = "선택됨",
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 8.dp)
             )
         }
     }
