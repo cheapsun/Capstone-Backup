@@ -287,9 +287,17 @@ fun ResultScreen(
 
             when {
                 isSelected -> {
-                    // 선택된 장소: 주황색 핀 + 번호
-                    options.setTexts("${selectedIndex + 1}")
-                    options.setStyles(orangePinStyle)
+                    // 선택된 장소: 주황색 핀 + 번호 (RouteMapScreen과 동일한 스타일)
+                    val numberedBitmap = createNumberedPinBitmap(
+                        context = context,
+                        number = selectedIndex + 1,
+                        color = "#FF9800", // 주황색
+                        alpha = 1.0f,
+                        scale = 1.0f
+                    )
+                    options.setStyles(
+                        LabelStyles.from(LabelStyle.from(numberedBitmap).setApplyDpScale(false))
+                    )
                 }
                 isTopPick -> {
                     // Top Pick: 골드색 핀
@@ -1452,6 +1460,54 @@ private fun createPinBitmap(context: android.content.Context, colorHex: String):
         Log.e("UI", "Failed to create pin bitmap", e)
         null
     }
+}
+
+/**
+ * 🔹 번호가 있는 핀 마커 비트맵 생성 (RouteMapScreen과 동일한 스타일)
+ */
+private fun createNumberedPinBitmap(
+    context: android.content.Context,
+    number: Int,
+    color: String,
+    alpha: Float = 1.0f,
+    scale: Float = 1.0f
+): Bitmap {
+    val baseSize = (60 * scale).toInt()
+    val bitmap = Bitmap.createBitmap(baseSize, baseSize, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    paint.alpha = (alpha * 255).toInt()
+
+    // 핀 배경 (원형)
+    paint.color = Color.parseColor(color)
+    canvas.drawCircle(
+        baseSize / 2f,
+        baseSize / 2f,
+        (baseSize / 2 - 2).toFloat(),
+        paint
+    )
+
+    // 테두리
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 3f
+    paint.color = Color.WHITE
+    canvas.drawCircle(
+        baseSize / 2f,
+        baseSize / 2f,
+        (baseSize / 2 - 2).toFloat(),
+        paint
+    )
+
+    // 숫자 텍스트
+    paint.style = Paint.Style.FILL
+    paint.color = Color.WHITE
+    paint.textSize = (baseSize * 0.5f)
+    paint.textAlign = Paint.Align.CENTER
+    val textY = baseSize / 2f - (paint.descent() + paint.ascent()) / 2f
+    canvas.drawText(number.toString(), baseSize / 2f, textY, paint)
+
+    return bitmap
 }
 
 /**
