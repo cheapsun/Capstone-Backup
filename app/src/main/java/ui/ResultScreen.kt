@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -612,55 +614,108 @@ fun ResultScreen(
 
         // 🔹 하단 액션 (T-Map 경로 생성 버튼 추가)
         item(key = "actions") {
-            Column(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(16.dp),
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 2.dp,
+                shadowElevation = 4.dp
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // 선택 초기화 버튼
                     OutlinedButton(
                         onClick = {
                             selectedPlaces.clear()
                             routeSegments = emptyList()
                             showRealRoute = false
-                            // LaunchedEffect가 자동으로 마커 및 경로 업데이트
                         },
-                        modifier = Modifier.weight(1f)
-                    ) { Text("선택 초기화") }
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "선택 초기화",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
 
+                    // 루트 생성하기 버튼
                     Button(
                         onClick = { buildRealRoute() },
                         enabled = selectedPlaces.size >= 2 && !isLoadingRoute,
-                        modifier = Modifier.weight(2f)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 4.dp,
+                            pressedElevation = 8.dp,
+                            disabledElevation = 0.dp
+                        )
                     ) {
                         if (isLoadingRoute) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
-                            Spacer(Modifier.width(8.dp))
-                            Text("경로 생성 중...")
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                "경로 생성 중...",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
                         } else {
-                            Text("루트 생성하기 (${selectedPlaces.size}개)")
+                            Icon(
+                                Icons.Default.Route,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "루트 생성하기 (${selectedPlaces.size}개)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
-                }
 
-                // 루트 저장 버튼 (루트 생성 완료 후에만 표시)
-                if (showRealRoute && routeSegments.isNotEmpty()) {
-                    Button(
-                        onClick = { showSaveDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Text("루트 저장하기")
+                    // 루트 저장 버튼 (루트 생성 완료 후에만 표시)
+                    if (showRealRoute && routeSegments.isNotEmpty()) {
+                        Button(
+                            onClick = { showSaveDialog = true },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary,
+                                contentColor = MaterialTheme.colorScheme.onSecondary
+                            ),
+                            shape = MaterialTheme.shapes.medium,
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 4.dp,
+                                pressedElevation = 8.dp
+                            )
+                        ) {
+                            Text(
+                                "✓ 루트 저장하기",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -1093,6 +1148,7 @@ private fun PlaceRow(
     val context = LocalContext.current
 
     ListItem(
+        modifier = Modifier.padding(vertical = 4.dp),
         headlineContent = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -1102,6 +1158,7 @@ private fun PlaceRow(
                 Text(
                     p.name,
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
@@ -1116,29 +1173,39 @@ private fun PlaceRow(
                         context.startActivity(intent)
                     },
                     colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
+                        contentColor = MaterialTheme.colorScheme.primary
                     ),
-                    contentPadding = PaddingValues(0.dp),
-                    modifier = Modifier.height(28.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp)
                 ) {
                     Text(
+                        "🔍",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
                         "바로가기",
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
         },
         supportingContent = {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (!p.address.isNullOrBlank()) {
-                    Text(p.address!!)
-                }
-                if (!reason.isNullOrBlank()) {
-                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "추천 이유: $reason",
+                        p.address!!,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (!reason.isNullOrBlank()) {
+                    Text(
+                        text = "💡 $reason",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -1146,7 +1213,7 @@ private fun PlaceRow(
         trailingContent = {
             Column(
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (catTop) SmallBadge("카테고리 Top")
@@ -1155,30 +1222,38 @@ private fun PlaceRow(
                 if (isSelected) {
                     OutlinedButton(
                         onClick = onToggle,
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
                     ) {
                         Text(
                             "제거",
-                            fontSize = MaterialTheme.typography.labelMedium.fontSize
+                            fontSize = MaterialTheme.typography.labelLarge.fontSize,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 } else {
                     Button(
                         onClick = onToggle,
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 2.dp
+                        )
                     ) {
                         Text(
                             "추가",
-                            fontSize = MaterialTheme.typography.labelMedium.fontSize
+                            fontSize = MaterialTheme.typography.labelLarge.fontSize,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
             }
         }
     )
-    Divider()
 }
 
 /** 상단 TopPick 카드 */
@@ -1531,35 +1606,62 @@ private fun RecommendedPlacesCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .animateContentSize(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column {
             // 헤더 (클릭 시 접기/펼치기)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onToggleExpand() },
+                    .clickable { onToggleExpand() }
+                    .padding(20.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "📍 추천 장소 (${places.size}개)",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "📍",
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                    Column {
+                        Text(
+                            "추천 장소",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            "${places.size}개",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 Icon(
                     Icons.Default.KeyboardArrowDown,
                     contentDescription = if (isExpanded) "접기" else "펼치기",
-                    modifier = Modifier.rotate(rotationAngle)
+                    modifier = Modifier.rotate(rotationAngle),
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
 
             if (isExpanded) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+
                 Spacer(Modifier.height(8.dp))
 
-                places.forEach { p ->
+                places.forEachIndexed { index, p ->
                     PlaceRow(
                         p = p,
                         reason = gptReasons[p.id],
@@ -1569,7 +1671,16 @@ private fun RecommendedPlacesCard(
                         regionHint = regionHint,
                         onToggle = { onToggle(p) }
                     )
+
+                    if (index < places.size - 1) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                    }
                 }
+
+                Spacer(Modifier.height(8.dp))
             }
         }
     }
