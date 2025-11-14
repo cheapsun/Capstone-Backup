@@ -224,7 +224,7 @@ fun ResultScreen(
     }
 
     // 🔹 LaunchedEffect로 마커 + 경로 동적 업데이트 (Capstone-Backup 방식 - 단일 Effect)
-    LaunchedEffect(kakaoMap, selectedPlaces.toList(), rec.places, showRealRoute, routeSegments, selectedSegmentIndex) {
+    LaunchedEffect(kakaoMap, selectedPlaces.toList(), rec.places, showRealRoute, routeSegments, selectedSegmentIndex, isPlaceListExpanded) {
         val map = kakaoMap ?: return@LaunchedEffect
         val labelManager = map.labelManager ?: return@LaunchedEffect
         val routeLineManager = map.routeLineManager ?: return@LaunchedEffect
@@ -269,6 +269,11 @@ fun ResultScreen(
             val selectedIndex = selectedPlaces.indexOfFirst { it.id == place.id }
             val isSelected = selectedIndex != -1
             val isTopPick = topIds.contains(place.id)
+
+            // 🔹 장소 리스트가 접혀있으면 선택된 장소만 표시
+            if (!isPlaceListExpanded && !isSelected) {
+                return@forEach  // 선택되지 않은 장소는 마커 추가 안 함
+            }
 
             val options = LabelOptions.from(LatLng.from(place.lat, place.lng))
                 .setClickable(true)
@@ -587,27 +592,20 @@ fun ResultScreen(
             }
         }
 
-        // 추천 장소 타이틀
-        item(key = "list_title") {
-            Text(
-                "추천 장소",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-
-        // 추천 장소 리스트
-        items(rec.places, key = { "place_${it.id}" }) { p ->
-            PlaceRow(
-                p = p,
-                reason = rec.gptReasons[p.id],
-                isSelected = selectedPlaces.any { it.id == p.id },
-                aiMarked = rec.aiTopIds.contains(p.id),
-                catTop = topIds.contains(p.id),
-                regionHint = regionHint,   // ✅ 지역 힌트 넘김
-                onToggle = {
-                    toggleSelect(p)
-                    focusOn(p)
+        // 🔹 추천 장소 리스트 (접기/펼치기 가능)
+        item(key = "recommended_places") {
+            RecommendedPlacesCard(
+                places = rec.places,
+                gptReasons = rec.gptReasons,
+                aiTopIds = rec.aiTopIds,
+                topIds = topIds,
+                selectedPlaces = selectedPlaces,
+                regionHint = regionHint,
+                isExpanded = isPlaceListExpanded,
+                onToggleExpand = { isPlaceListExpanded = !isPlaceListExpanded },
+                onToggle = { place ->
+                    toggleSelect(place)
+                    focusOn(place)
                 }
             )
         }
@@ -1503,6 +1501,74 @@ private fun SaveRouteDialog(
                     ) {
                         Text("저장")
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 🔹 추천 장소 카드 (접기/펼치기 가능)
+ */
+@Composable
+private fun RecommendedPlacesCard(
+    places: List<Place>,
+    gptReasons: Map<String, String>,
+    aiTopIds: Set<String>,
+    topIds: Set<String>,
+    selectedPlaces: List<Place>,
+    regionHint: String?,
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onToggle: (Place) -> Unit
+) {
+    val rotationAngle by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = tween(300),
+        label = "rotation"
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .animateContentSize(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            // 헤더 (클릭 시 접기/펼치기)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleExpand() },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "📍 추천 장소 (${places.size}개)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) "접기" else "펼치기",
+                    modifier = Modifier.rotate(rotationAngle)
+                )
+            }
+
+            if (isExpanded) {
+                Spacer(Modifier.height(8.dp))
+
+                places.forEach { p ->
+                    PlaceRow(
+                        p = p,
+                        reason = gptReasons[p.id],
+                        isSelected = selectedPlaces.any { it.id == p.id },
+                        aiMarked = aiTopIds.contains(p.id),
+                        catTop = topIds.contains(p.id),
+                        regionHint = regionHint,
+                        onToggle = { onToggle(p) }
+                    )
                 }
             }
         }

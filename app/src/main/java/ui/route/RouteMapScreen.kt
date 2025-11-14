@@ -197,7 +197,7 @@ fun RouteMapScreen(
     }
 
     // 🔹 지도 및 경로 업데이트
-    LaunchedEffect(kakaoMap, selectedSegmentIndex) {
+    LaunchedEffect(kakaoMap, selectedSegmentIndex, isPlaceListExpanded) {
         kakaoMap?.let { map ->
             try {
                 val labelManager = map.labelManager
@@ -216,28 +216,31 @@ fun RouteMapScreen(
                 delay(100) // 약간의 지연으로 안정성 확보
 
                 // 🔹 마커 추가 (장소)
-                route.places.forEachIndexed { index, place ->
-                    val currentSelectedIndex = selectedSegmentIndex
-                    val isInSelectedSegment = when (currentSelectedIndex) {
-                        null -> true // 전체 보기
-                        else -> index == currentSelectedIndex || index == currentSelectedIndex + 1
+                // 장소 리스트가 펼쳐져 있을 때만 마커 표시
+                if (isPlaceListExpanded) {
+                    route.places.forEachIndexed { index, place ->
+                        val currentSelectedIndex = selectedSegmentIndex
+                        val isInSelectedSegment = when (currentSelectedIndex) {
+                            null -> true // 전체 보기
+                            else -> index == currentSelectedIndex || index == currentSelectedIndex + 1
+                        }
+
+                        val alpha = if (isInSelectedSegment) 1.0f else 0.3f
+                        val scale = if (isInSelectedSegment) 1.2f else 0.8f
+
+                        val bitmap = createNumberedPinBitmap(
+                            context = context,
+                            number = index + 1,
+                            color = segmentColors[index % segmentColors.size],
+                            alpha = alpha,
+                            scale = scale
+                        )
+
+                        val options = LabelOptions.from(LatLng.from(place.lat, place.lng))
+                            .setStyles(LabelStyles.from(LabelStyle.from(bitmap).setApplyDpScale(false)))
+
+                        labelManager?.layer?.addLabel(options)?.let { labels.add(it) }
                     }
-
-                    val alpha = if (isInSelectedSegment) 1.0f else 0.3f
-                    val scale = if (isInSelectedSegment) 1.2f else 0.8f
-
-                    val bitmap = createNumberedPinBitmap(
-                        context = context,
-                        number = index + 1,
-                        color = segmentColors[index % segmentColors.size],
-                        alpha = alpha,
-                        scale = scale
-                    )
-
-                    val options = LabelOptions.from(LatLng.from(place.lat, place.lng))
-                        .setStyles(LabelStyles.from(LabelStyle.from(bitmap).setApplyDpScale(false)))
-
-                    labelManager?.layer?.addLabel(options)?.let { labels.add(it) }
                 }
 
                 // 🔹 경로 라인 추가 (구간별)
