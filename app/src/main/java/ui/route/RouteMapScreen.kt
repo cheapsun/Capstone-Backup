@@ -114,9 +114,10 @@ fun RouteMapScreen(
 
                 // 🔹 마커 추가 (장소)
                 route.places.forEachIndexed { index, place ->
-                    val isInSelectedSegment = when (selectedSegmentIndex) {
+                    val currentSelectedIndex = selectedSegmentIndex
+                    val isInSelectedSegment = when (currentSelectedIndex) {
                         null -> true // 전체 보기
-                        else -> index == selectedSegmentIndex || index == selectedSegmentIndex + 1
+                        else -> index == currentSelectedIndex || index == currentSelectedIndex + 1
                     }
 
                     val alpha = if (isInSelectedSegment) 1.0f else 0.3f
@@ -153,7 +154,7 @@ fun RouteMapScreen(
                             isSelected -> 1.0f // 선택된 구간
                             else -> 0.3f // 선택되지 않은 구간
                         }
-                        val width = if (isSelected) 8 else 6
+                        val width = if (isSelected) 8f else 6f
 
                         // alpha 값을 포함한 color 생성
                         val red = Color.red(baseColor)
