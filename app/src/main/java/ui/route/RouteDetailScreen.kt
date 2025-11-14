@@ -158,7 +158,7 @@ fun RouteDetailScreen(
             ) {
                 // 헤더
                 item(key = "header") {
-                    RouteHeader(route)
+                    RouteHeader(route!!)
                 }
 
                 // 🔹 드래그 가능한 장소 섹션 (별도 Composable)
@@ -186,17 +186,17 @@ fun RouteDetailScreen(
             ) {
                 // 헤더
                 item {
-                    RouteHeader(route)
+                    RouteHeader(route!!)
                 }
 
                 // 장소 리스트
-                itemsIndexed(route.places, key = { _, place -> place.id }) { index, place ->
+                itemsIndexed(route!!.places, key = { _, place -> place.id }) { index, place ->
                     PlaceItemCard(
                         place = place,
                         index = index,
-                        isLast = index == route.places.size - 1,
-                        nextSegment = if (index < route.routeSegments.size) {
-                            route.routeSegments[index]
+                        isLast = index == route!!.places.size - 1,
+                        nextSegment = if (index < route!!.routeSegments.size) {
+                            route!!.routeSegments[index]
                         } else null
                     )
                 }
