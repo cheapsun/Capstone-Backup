@@ -45,7 +45,6 @@ import com.kakao.vectormap.route.RouteLineOptions
 import com.kakao.vectormap.route.RouteLineSegment
 import com.kakao.vectormap.route.RouteLineStyle
 import com.kakao.vectormap.route.RouteLineStyles
-import com.kakao.vectormap.route.RouteLineStylesSet
 import kotlinx.coroutines.delay
 
 /**
@@ -163,12 +162,15 @@ fun RouteMapScreen(
                         val colorWithAlpha = Color.argb((alpha * 255).toInt(), red, green, blue)
 
                         val points = segment.pathCoordinates
-                        val routeSegment = RouteLineSegment.from(points)
 
-                        val style = RouteLineStyle.from(width, colorWithAlpha)
-                        val stylesSet = RouteLineStylesSet.from(style)
-                        val options = RouteLineOptions.from(listOf(routeSegment))
-                            .setStylesSet(stylesSet)
+                        val options = RouteLineOptions.from(
+                            RouteLineSegment.from(points)
+                                .setStyles(
+                                    RouteLineStyles.from(
+                                        RouteLineStyle.from(width, colorWithAlpha)
+                                    )
+                                )
+                        )
 
                         routeLineManager?.layer?.addRouteLine(options)?.let { routeLine ->
                             routeLine.show()

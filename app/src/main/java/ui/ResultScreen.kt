@@ -332,11 +332,14 @@ fun ResultScreen(
                         val blue = Color.blue(baseColor)
                         val colorWithAlpha = Color.argb((alpha * 255).toInt(), red, green, blue)
 
-                        val style = RouteLineStyle.from(width, colorWithAlpha)
-                        val stylesSet = RouteLineStylesSet.from(style)
                         val options = RouteLineOptions.from(
-                            listOf(RouteLineSegment.from(coords))
-                        ).setStylesSet(stylesSet)
+                            RouteLineSegment.from(coords)
+                                .setStyles(
+                                    RouteLineStyles.from(
+                                        RouteLineStyle.from(width, colorWithAlpha)
+                                    )
+                                )
+                        )
 
                         val routeLine = routeLineManager.layer?.addRouteLine(options)
                         if (routeLine != null) {
