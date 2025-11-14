@@ -41,7 +41,7 @@ fun RouteDetailScreen(
 ) {
     val context = LocalContext.current
     val routeStorage = remember { RouteStorage.getInstance(context) }
-    val route = remember { routeStorage.getRoute(routeId) }
+    var route by remember { mutableStateOf(routeStorage.getRoute(routeId)) }
 
     if (route == null) {
         // 루트를 찾을 수 없음
@@ -56,7 +56,7 @@ fun RouteDetailScreen(
 
     // 🔹 편집 모드 상태
     var isEditMode by remember { mutableStateOf(false) }
-    val editablePlaces = remember { mutableStateListOf<Place>().apply { addAll(route.places) } }
+    val editablePlaces = remember(route) { mutableStateListOf<Place>().apply { addAll(route!!.places) } }
     var isSaving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -80,11 +80,13 @@ fun RouteDetailScreen(
                                         try {
                                             // T-Map으로 경로 재생성
                                             val newSegments = TmapPedestrianService.getFullRoute(editablePlaces)
-                                            val updatedRoute = route.copy(
+                                            val updatedRoute = route!!.copy(
                                                 places = editablePlaces.toList(),
                                                 routeSegments = newSegments
                                             )
                                             routeStorage.saveRoute(updatedRoute)
+                                            // 🔹 route를 업데이트하여 UI에 반영
+                                            route = updatedRoute
                                             Toast.makeText(context, "저장되었습니다", Toast.LENGTH_SHORT).show()
                                             isEditMode = false
                                         } catch (e: Exception) {
@@ -108,7 +110,12 @@ fun RouteDetailScreen(
                         }
                     } else {
                         // 편집 버튼
-                        IconButton(onClick = { isEditMode = true }) {
+                        IconButton(onClick = {
+                            // 🔹 편집 모드 진입 시 현재 route의 places로 리셋
+                            editablePlaces.clear()
+                            editablePlaces.addAll(route!!.places)
+                            isEditMode = true
+                        }) {
                             Icon(Icons.Default.Edit, contentDescription = "편집")
                         }
                     }
