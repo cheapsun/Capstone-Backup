@@ -438,35 +438,14 @@ fun ResultScreen(
         }
     }
 
-    // 전체 스크롤
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(bottom = 16.dp)
-    ) {
-        // 날씨
-        item(key = "weather") {
-            WeatherBanner(rec.weather)
-        }
-
-        // 지도 + GPS 버튼
-        item(key = "map") {
-            // 🔹 지도 터치 시 LazyColumn 스크롤 차단
-            val mapNestedScrollConnection = remember {
-                object : NestedScrollConnection {
-                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                        // 지도 영역 터치 시 부모의 스크롤을 모두 소비하여 차단
-                        return available
-                    }
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp)
-                    .nestedScroll(mapNestedScrollConnection)
-            ) {
+    // 🔹 전체 레이아웃: 상단 고정 지도 + 하단 스크롤 컨텐츠
+    Column(modifier = Modifier.fillMaxSize()) {
+        // 🗺️ 상단 고정 지도 (스크롤되지 않음)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(400.dp)
+        ) {
                 AndroidView(
                     factory = {
                         val mv = MapView(context).apply {
@@ -546,7 +525,20 @@ fun ResultScreen(
             }
         }
 
-        // 🔹 선택된 장소 섹션 (드래그 가능한 별도 영역)
+        // 📜 하단 스크롤 가능 컨텐츠
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 16.dp)
+        ) {
+            // 날씨
+            item(key = "weather") {
+                WeatherBanner(rec.weather)
+            }
+
+            // 🔹 선택된 장소 섹션 (드래그 가능한 별도 영역)
         if (selectedPlaces.isNotEmpty()) {
             item(key = "selected_places_section") {
                 SelectedPlacesSection(
@@ -736,7 +728,8 @@ fun ResultScreen(
                 }
             }
         }
-    }
+        } // LazyColumn 끝
+    } // Column 끝
 
     // 🔹 루트 저장 다이얼로그
     if (showSaveDialog) {
