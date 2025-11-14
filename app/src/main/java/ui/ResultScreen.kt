@@ -37,6 +37,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -447,10 +451,21 @@ fun ResultScreen(
 
         // 지도 + GPS 버튼
         item(key = "map") {
+            // 🔹 지도 터치 시 LazyColumn 스크롤 차단
+            val mapNestedScrollConnection = remember {
+                object : NestedScrollConnection {
+                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                        // 지도 영역 터치 시 부모의 스크롤을 모두 소비하여 차단
+                        return available
+                    }
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(260.dp)
+                    .nestedScroll(mapNestedScrollConnection)
             ) {
                 AndroidView(
                     factory = {
