@@ -87,7 +87,11 @@ fun ResultScreen(
     // 🔹 Reorderable state for drag-and-drop
     val reorderableState = rememberReorderableLazyListState(
         onMove = { from, to ->
-            selectedOrder.add(to.index, selectedOrder.removeAt(from.index))
+            if (from.index >= 0 && from.index < selectedOrder.size &&
+                to.index >= 0 && to.index <= selectedOrder.size) {
+                val item = selectedOrder.removeAt(from.index)
+                selectedOrder.add(to.index, item)
+            }
         }
     )
 
