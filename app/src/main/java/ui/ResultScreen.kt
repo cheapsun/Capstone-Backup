@@ -287,11 +287,11 @@ fun ResultScreen(
 
             when {
                 isSelected -> {
-                    // 선택된 장소: 주황색 핀 + 번호 (RouteMapScreen과 동일한 스타일)
+                    // 선택된 장소: 구간별 색상 핀 + 번호 (RouteMapScreen과 동일한 스타일)
                     val numberedBitmap = createNumberedPinBitmap(
                         context = context,
                         number = selectedIndex + 1,
-                        color = "#FF9800", // 주황색
+                        color = segmentColors[selectedIndex % segmentColors.size],
                         alpha = 1.0f,
                         scale = 1.0f
                     )
