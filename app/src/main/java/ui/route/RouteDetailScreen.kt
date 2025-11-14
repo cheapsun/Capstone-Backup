@@ -58,7 +58,6 @@ fun RouteDetailScreen(
     var isEditMode by remember { mutableStateOf(false) }
     val editablePlaces = remember { mutableStateListOf<Place>().apply { addAll(route.places) } }
     var isSaving by remember { mutableStateOf(false) }
-    var showAddPlaceDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -136,21 +135,18 @@ fun RouteDetailScreen(
         }
     ) { padding ->
         if (isEditMode) {
-            // 🔹 편집 모드: 드래그 가능
+            // 🔹 편집 모드: 드래그 가능 (별도 섹션으로 분리)
             val reorderableState = rememberReorderableLazyListState(
                 onMove = { from, to ->
-                    // ✅ ReorderableItem만 추적하므로 -1 불필요
                     val item = editablePlaces.removeAt(from.index)
                     editablePlaces.add(to.index, item)
                 }
             )
 
             LazyColumn(
-                state = reorderableState.listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
-                    .reorderable(reorderableState),
+                    .padding(padding),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
                 // 헤더
@@ -158,41 +154,19 @@ fun RouteDetailScreen(
                     RouteHeader(route)
                 }
 
-                // 장소 리스트 (편집 모드)
-                itemsIndexed(editablePlaces, key = { _, place -> place.id }) { index, place ->
-                    ReorderableItem(reorderableState, key = place.id) { isDragging ->
-                        EditablePlaceItemCard(
-                            place = place,
-                            index = index,
-                            isDragging = isDragging,
-                            reorderableState = reorderableState,
-                            onRemove = {
-                                if (editablePlaces.size > 2) {
-                                    editablePlaces.remove(place)
-                                } else {
-                                    Toast.makeText(context, "최소 2개 장소가 필요합니다", Toast.LENGTH_SHORT).show()
-                                }
+                // 🔹 드래그 가능한 장소 섹션 (별도 Composable)
+                item(key = "editable_places_section") {
+                    EditablePlacesSection(
+                        editablePlaces = editablePlaces,
+                        reorderableState = reorderableState,
+                        onRemove = { place ->
+                            if (editablePlaces.size > 2) {
+                                editablePlaces.remove(place)
+                            } else {
+                                Toast.makeText(context, "최소 2개 장소가 필요합니다", Toast.LENGTH_SHORT).show()
                             }
-                        )
-                    }
-                }
-
-                // 🔹 장소 추가 버튼
-                item(key = "add_place_button") {
-                    OutlinedButton(
-                        onClick = { showAddPlaceDialog = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "장소 추가",
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("장소 추가")
-                    }
+                        }
+                    )
                 }
             }
         } else {
@@ -221,18 +195,6 @@ fun RouteDetailScreen(
                 }
             }
         }
-    }
-
-    // 🔹 장소 추가 다이얼로그
-    if (showAddPlaceDialog) {
-        AddPlaceDialog(
-            onDismiss = { showAddPlaceDialog = false },
-            onAdd = { place ->
-                editablePlaces.add(place)
-                showAddPlaceDialog = false
-                Toast.makeText(context, "장소가 추가되었습니다", Toast.LENGTH_SHORT).show()
-            }
-        )
     }
 }
 
@@ -519,119 +481,68 @@ private fun EditablePlaceItemCard(
 }
 
 /**
- * 🔹 장소 추가 다이얼로그
+ * 🔹 편집 가능한 장소 섹션 (드래그 가능)
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddPlaceDialog(
-    onDismiss: () -> Unit,
-    onAdd: (Place) -> Unit
+private fun EditablePlacesSection(
+    editablePlaces: List<Place>,
+    reorderableState: ReorderableLazyListState,
+    onRemove: (Place) -> Unit
 ) {
-    var placeName by remember { mutableStateOf("") }
-    var placeAddress by remember { mutableStateOf("") }
-    var latitude by remember { mutableStateOf("") }
-    var longitude by remember { mutableStateOf("") }
-
-    Dialog(onDismissRequest = onDismiss) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        // 헤더
         Card(
-            shape = MaterialTheme.shapes.large,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            )
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "장소 추가",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-
-                OutlinedTextField(
-                    value = placeName,
-                    onValueChange = { placeName = it },
-                    label = { Text("장소 이름") },
-                    placeholder = { Text("예: 카페") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-
-                OutlinedTextField(
-                    value = placeAddress,
-                    onValueChange = { placeAddress = it },
-                    label = { Text("주소 (선택사항)") },
-                    placeholder = { Text("예: 서울시 강남구...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = latitude,
-                        onValueChange = { latitude = it },
-                        label = { Text("위도") },
-                        placeholder = { Text("37.1234") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = longitude,
-                        onValueChange = { longitude = it },
-                        label = { Text("경도") },
-                        placeholder = { Text("127.1234") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                }
-
-                Text(
-                    "위도/경도는 네이버 지도나 카카오맵에서 확인할 수 있습니다.",
-                    style = MaterialTheme.typography.bodySmall,
+                    "장소 목록 (${editablePlaces.size}개)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Text(
+                    "≡ 드래그하여 순서 변경",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+        }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("취소")
-                    }
+        Spacer(modifier = Modifier.height(8.dp))
 
-                    Button(
-                        onClick = {
-                            val lat = latitude.toDoubleOrNull()
-                            val lng = longitude.toDoubleOrNull()
-
-                            if (placeName.isNotBlank() && lat != null && lng != null) {
-                                val newPlace = Place(
-                                    id = System.currentTimeMillis().toString(),
-                                    name = placeName,
-                                    category = Category.EXPERIENCE,
-                                    lat = lat,
-                                    lng = lng,
-                                    address = placeAddress.ifBlank { null },
-                                    rating = null
-                                )
-                                onAdd(newPlace)
-                            }
-                        },
-                        enabled = placeName.isNotBlank() &&
-                                  latitude.toDoubleOrNull() != null &&
-                                  longitude.toDoubleOrNull() != null,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("추가")
-                    }
+        // 드래그 가능한 장소 리스트 (LazyColumn 사용)
+        LazyColumn(
+            state = reorderableState.listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 600.dp)  // 최대 높이 제한
+                .reorderable(reorderableState),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            itemsIndexed(editablePlaces, key = { _, place -> place.id }) { index, place ->
+                ReorderableItem(reorderableState, key = place.id) { isDragging ->
+                    EditablePlaceItemCard(
+                        place = place,
+                        index = index,
+                        isDragging = isDragging,
+                        reorderableState = reorderableState,
+                        onRemove = { onRemove(place) }
+                    )
                 }
             }
         }
