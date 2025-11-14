@@ -300,10 +300,14 @@ fun ResultScreen(
         // removeAll()로 이미 제거되었으므로 map만 클리어
         routeLines.clear()
 
+        Log.d("UI", "🔍 경로 표시 조건: showRealRoute=$showRealRoute, routeSegments.size=${routeSegments.size}")
+
         if (showRealRoute && routeSegments.isNotEmpty()) {
             try {
+                Log.d("UI", "🚀 경로선 그리기 시작: ${routeSegments.size}개 구간")
                 routeSegments.forEachIndexed { index, segment ->
                     val coords = segment.pathCoordinates
+                    Log.d("UI", "  구간 ${index + 1}: ${segment.from.name} → ${segment.to.name}, 좌표 ${coords.size}개")
                     if (coords.size >= 2) {
                         val colorHex = segmentColors[index % segmentColors.size]
                         val baseColor = Color.parseColor(colorHex)
@@ -342,6 +346,8 @@ fun ResultScreen(
                         } else {
                             Log.e("UI", "❌ 경로 ${index + 1} 추가 실패: addRouteLine returned null")
                         }
+                    } else {
+                        Log.w("UI", "⚠️ 구간 ${index + 1}: 좌표가 부족함 (${coords.size}개)")
                     }
                 }
 
@@ -399,6 +405,9 @@ fun ResultScreen(
                     routeSegments = segments
                     showRealRoute = true
                     Log.d("UI", "✅ T-Map 경로 생성 완료: ${segments.size}개 구간")
+                    segments.forEachIndexed { idx, seg ->
+                        Log.d("UI", "  구간 ${idx + 1}: ${seg.from.name} → ${seg.to.name}, 좌표 ${seg.pathCoordinates.size}개")
+                    }
 
                     // 경로 중심으로 카메라 이동
                     val (centerLat, centerLng) = computeCenter(selectedPlaces)

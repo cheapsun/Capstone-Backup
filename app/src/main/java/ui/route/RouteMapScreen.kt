@@ -106,8 +106,8 @@ fun RouteMapScreen(
 
                 // 기존 라벨 및 경로 제거
                 labelManager?.layer?.removeAll()
+                routeLineManager?.layer?.removeAll()
                 labels.clear()
-                routeLines.values.forEach { routeLineManager?.remove(it) }
                 routeLines.clear()
 
                 delay(100) // 약간의 지연으로 안정성 확보
@@ -171,7 +171,11 @@ fun RouteMapScreen(
                             .setStylesSet(stylesSet)
 
                         routeLineManager?.layer?.addRouteLine(options)?.let { routeLine ->
+                            routeLine.show()
                             routeLines[index] = routeLine
+                            Log.d("RouteMapScreen", "✅ 경로 ${index + 1}: ${points.size}개 좌표, 투명도=$alpha")
+                        } ?: run {
+                            Log.e("RouteMapScreen", "❌ 경로 ${index + 1} 추가 실패")
                         }
                     }
                 }
