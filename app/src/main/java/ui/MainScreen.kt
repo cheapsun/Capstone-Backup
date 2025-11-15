@@ -82,7 +82,11 @@ fun MainScreen(
                 SearchCard(
                     value = ui.filter.region,
                     onValueChange = vm::setRegion,
-                    onDone = { focusManager.clearFocus() }
+                    onDone = { focusManager.clearFocus() },
+                    showAutoComplete = ui.showAutoComplete,
+                    autoCompleteSuggestions = ui.autoCompleteSuggestions,
+                    onSelectSuggestion = vm::selectAutoComplete,
+                    onDismissAutoComplete = vm::hideAutoComplete
                 )
             }
 
@@ -209,7 +213,11 @@ fun MainScreen(
 private fun SearchCard(
     value: String,
     onValueChange: (String) -> Unit,
-    onDone: () -> Unit
+    onDone: () -> Unit,
+    showAutoComplete: Boolean = false,
+    autoCompleteSuggestions: List<String> = emptyList(),
+    onSelectSuggestion: (String) -> Unit = {},
+    onDismissAutoComplete: () -> Unit = {}
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -217,6 +225,7 @@ private fun SearchCard(
         tonalElevation = 1.dp
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 검색창
             OutlinedTextField(
                 value = value,
                 onValueChange = onValueChange,
@@ -225,13 +234,58 @@ private fun SearchCard(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onDone() })
+                keyboardActions = KeyboardActions(onDone = {
+                    onDismissAutoComplete()
+                    onDone()
+                })
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                QuickRegionChip("서울") { onValueChange("서울") }
-                QuickRegionChip("부산") { onValueChange("부산") }
-                QuickRegionChip("제주") { onValueChange("제주") }
-                QuickRegionChip("강릉") { onValueChange("강릉") }
+
+            // 자동완성 리스트 (조건부 표시)
+            if (showAutoComplete && autoCompleteSuggestions.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    tonalElevation = 2.dp
+                ) {
+                    Column {
+                        autoCompleteSuggestions.forEach { suggestion ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(4.dp)),
+                                onClick = {
+                                    onSelectSuggestion(suggestion)
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        text = suggestion,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 빠른 지역 선택
+            if (!showAutoComplete) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QuickRegionChip("서울") { onValueChange("서울") }
+                    QuickRegionChip("부산") { onValueChange("부산") }
+                    QuickRegionChip("제주") { onValueChange("제주") }
+                    QuickRegionChip("강릉") { onValueChange("강릉") }
+                }
             }
         }
     }

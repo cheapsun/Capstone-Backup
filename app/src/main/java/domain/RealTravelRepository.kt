@@ -5,7 +5,12 @@ import com.example.project_2.data.KakaoLocalService
 import com.example.project_2.data.weather.WeatherService
 import com.example.project_2.domain.GptRerankUseCase
 import com.example.project_2.domain.model.*
+import com.example.project_2.domain.SubRegionsData
+import com.example.project_2.domain.SearchType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlin.math.min
 
@@ -172,5 +177,184 @@ class RealTravelRepository(
             topPicks   = top,
             aiTopIds   = out.aiTopIds
         )
+    }
+
+    // ===== 다중 중심점 검색 (WIDE 전략) =====
+    /**
+     * 여러 세부 지역 중심으로 병렬 검색 후 결과 병합
+     *
+     * @param mainRegion 주 지역명 (예: "부산")
+     * @param subRegions 세부 지역 리스트 (예: ["해운대", "광안리", "서면"])
+     * @param categories 검색할 카테고리
+     * @param radiusPerPoint 각 중심점당 검색 반경 (미터)
+     * @param sizePerPoint 각 중심점당 최대 결과 수
+     * @return 병합된 장소 리스트
+     */
+    suspend fun searchMultiplePoints(
+        mainRegion: String,
+        subRegions: List<String>,
+        categories: Set<Category>,
+        radiusPerPoint: Int = 3000,
+        sizePerPoint: Int = 5
+    ): List<Place> = withContext(Dispatchers.IO) {
+        Log.d("MULTI_SEARCH", "searchMultiplePoints: main=$mainRegion, subs=$subRegions, radius=$radiusPerPoint")
+
+        val cats = if (categories.isEmpty()) setOf(Category.FOOD) else categories
+        val allPlaces = mutableListOf<Place>()
+
+        // 병렬로 각 세부 지역 검색
+        coroutineScope {
+            val searchJobs = subRegions.map { subRegion ->
+                async {
+                    try {
+                        // 좌표 얻기
+                        val fullRegionName = "$mainRegion $subRegion"
+                        Log.d("MULTI_SEARCH", "Geocoding: $fullRegionName")
+
+                        val coords = KakaoLocalService.geocode(fullRegionName)
+                        if (coords == null) {
+                            Log.w("MULTI_SEARCH", "Geocode failed for: $fullRegionName")
+                            return@async emptyList<Place>()
+                        }
+
+                        val (lat, lng) = coords
+                        Log.d("MULTI_SEARCH", "$fullRegionName -> ($lat, $lng)")
+
+                        // 장소 검색
+                        val places = KakaoLocalService.searchByCategories(
+                            centerLat = lat,
+                            centerLng = lng,
+                            categories = cats,
+                            radiusMeters = radiusPerPoint,
+                            size = sizePerPoint
+                        )
+
+                        Log.d("MULTI_SEARCH", "$subRegion: ${places.size} places found")
+                        places
+                    } catch (e: Exception) {
+                        Log.e("MULTI_SEARCH", "Error searching $subRegion: ${e.message}", e)
+                        emptyList()
+                    }
+                }
+            }
+
+            // 모든 검색 완료 대기 후 병합
+            searchJobs.awaitAll().forEach { places ->
+                allPlaces.addAll(places)
+            }
+        }
+
+        // 중복 제거 (같은 place_id)
+        val uniquePlaces = allPlaces.distinctBy { it.id }
+
+        Log.d("MULTI_SEARCH", "Total: ${allPlaces.size} places, Unique: ${uniquePlaces.size}")
+        Log.d("MULTI_SEARCH", "Sample: ${uniquePlaces.take(5).joinToString { it.name }}")
+
+        uniquePlaces
+    }
+
+    /**
+     * WIDE 전략용 GPT 재랭크 추천
+     *
+     * @param filter 사용자 필터 (지역, 카테고리 등)
+     * @param subRegions 세부 지역 리스트
+     * @param radiusMeters 각 세부 지역당 검색 반경
+     * @param candidateSizePerRegion 각 지역당 후보 수
+     * @return 재랭크된 추천 결과
+     */
+    suspend fun recommendWideWithGpt(
+        filter: FilterState,
+        subRegions: List<String>,
+        radiusMeters: Int = 3000,
+        candidateSizePerRegion: Int = 5
+    ): RecommendationResult = withContext(Dispatchers.IO) {
+        val mainRegion = filter.region.ifBlank { "서울" }
+        Log.d("WIDE_SEARCH", "recommendWideWithGpt: region=$mainRegion, subs=$subRegions")
+
+        // 날씨 조회 (주 지역 중심으로)
+        val weather = getWeather(mainRegion).also {
+            Log.d("WIDE_SEARCH", "weather=${it?.condition} ${it?.tempC}C")
+        }
+
+        val cats = if (filter.categories.isEmpty()) setOf(Category.FOOD) else filter.categories
+
+        // 다중 중심점 검색
+        val candidates = searchMultiplePoints(
+            mainRegion = mainRegion,
+            subRegions = subRegions,
+            categories = cats,
+            radiusPerPoint = radiusMeters,
+            sizePerPoint = candidateSizePerRegion
+        )
+
+        Log.d("WIDE_SEARCH", "Multi-point search returned ${candidates.size} candidates")
+
+        if (candidates.isEmpty()) {
+            Log.w("WIDE_SEARCH", "No candidates found!")
+            return@withContext RecommendationResult(emptyList(), weather)
+        }
+
+        // GPT 재랭크
+        val out = runCatching {
+            reranker.rerankWithReasons(filter, weather, candidates)
+        }.onFailure {
+            Log.e("WIDE_SEARCH", "GPT rerank error: ${it.message}", it)
+        }.getOrElse {
+            GptRerankUseCase.RerankOutput(candidates, emptyMap())
+        }
+
+        // 리밸런싱
+        val (top, ordered) = rebalanceByCategory(
+            candidates = out.places,
+            selectedCats = cats,
+            minPerCat = 4,
+            perCatTop = 1,
+            totalCap = null
+        )
+
+        RecommendationResult(
+            places     = ordered,
+            weather    = weather,
+            gptReasons = out.reasons,
+            topPicks   = top,
+            aiTopIds   = out.aiTopIds
+        )
+    }
+
+    /**
+     * 검색 범위 확대 (더 많은 장소 보기)
+     *
+     * @param centerLat 중심 위도
+     * @param centerLng 중심 경도
+     * @param categories 카테고리
+     * @param newRadius 확대된 반경
+     * @param excludeIds 이미 표시된 장소 ID (중복 제외용)
+     * @return 추가 장소 리스트
+     */
+    suspend fun expandSearch(
+        centerLat: Double,
+        centerLng: Double,
+        categories: Set<Category>,
+        newRadius: Int = 5000,
+        excludeIds: Set<String> = emptySet()
+    ): List<Place> = withContext(Dispatchers.IO) {
+        Log.d("EXPAND_SEARCH", "expandSearch: radius=$newRadius, exclude=${excludeIds.size}")
+
+        val cats = if (categories.isEmpty()) setOf(Category.FOOD) else categories
+
+        val newPlaces = KakaoLocalService.searchByCategories(
+            centerLat = centerLat,
+            centerLng = centerLng,
+            categories = cats,
+            radiusMeters = newRadius,
+            size = 15  // 더 많이 검색
+        )
+
+        // 이미 표시된 장소 제외
+        val filtered = newPlaces.filter { it.id !in excludeIds }
+
+        Log.d("EXPAND_SEARCH", "Found ${newPlaces.size} places, ${filtered.size} new ones")
+
+        filtered
     }
 }

@@ -73,12 +73,18 @@ import java.net.URLEncoder
 @Composable
 fun ResultScreen(
     rec: RecommendationResult,
-    regionHint: String? = null   // ✅ 사용자가 입력했던 지역 (예: "광주 상무동")
+    regionHint: String? = null,   // ✅ 사용자가 입력했던 지역 (예: "광주 상무동")
+    onExpandSearch: (suspend (excludeIds: Set<String>) -> List<Place>)? = null  // 🔹 검색 확장 콜백
 ) {
     Log.d("UI", "ResultScreen received ${rec.places.size} places (topPicks=${rec.topPicks.size})")
     rec.places.forEachIndexed { i, p ->
         Log.d("UI", "[$i] ${p.name} (${p.lat}, ${p.lng}) reason=${rec.gptReasons[p.id] ?: "없음"}")
     }
+
+    // 🔹 전체 장소 리스트 (확장 검색 시 추가됨)
+    var allPlaces by remember { mutableStateOf(rec.places) }
+    var isExpanding by remember { mutableStateOf(false) }
+    var hasExpanded by remember { mutableStateOf(false) }
 
     var kakaoMap by remember { mutableStateOf<KakaoMap?>(null) }
     val labelPlaceMap = remember { mutableMapOf<Label, Place>() }
@@ -230,8 +236,33 @@ fun ResultScreen(
         }
     }
 
+    // 🔹 검색 확장 실행
+    val executeExpandSearch: () -> Unit = {
+        if (onExpandSearch != null && !hasExpanded && !isExpanding) {
+            scope.launch {
+                isExpanding = true
+                try {
+                    val currentIds = allPlaces.map { it.id }.toSet()
+                    Log.d("UI", "🔍 검색 범위 확장 시작 (제외: ${currentIds.size}개)")
+                    val newPlaces = onExpandSearch(currentIds)
+                    if (newPlaces.isNotEmpty()) {
+                        allPlaces = allPlaces + newPlaces
+                        Log.d("UI", "✅ 새로운 장소 추가: ${newPlaces.size}개, 총 ${allPlaces.size}개")
+                    } else {
+                        Log.w("UI", "⚠️ 확장된 범위에서 새로운 장소를 찾지 못했습니다")
+                    }
+                    hasExpanded = true
+                } catch (e: Exception) {
+                    Log.e("UI", "❌ 검색 확장 실패: ${e.message}", e)
+                } finally {
+                    isExpanding = false
+                }
+            }
+        }
+    }
+
     // 🔹 LaunchedEffect로 마커 + 경로 동적 업데이트 (Capstone-Backup 방식 - 단일 Effect)
-    LaunchedEffect(kakaoMap, selectedPlaces.toList(), rec.places, showRealRoute, routeSegments, selectedSegmentIndex, isPlaceListExpanded) {
+    LaunchedEffect(kakaoMap, selectedPlaces.toList(), allPlaces, showRealRoute, routeSegments, selectedSegmentIndex, isPlaceListExpanded) {
         val map = kakaoMap ?: return@LaunchedEffect
         val labelManager = map.labelManager ?: return@LaunchedEffect
         val routeLineManager = map.routeLineManager ?: return@LaunchedEffect
@@ -245,7 +276,7 @@ fun ResultScreen(
         routeLineManager.layer?.removeAll()
         labelPlaceMap.clear()
 
-        Log.d("UI", "LaunchedEffect: Adding ${rec.places.size} markers")
+        Log.d("UI", "LaunchedEffect: Adding ${allPlaces.size} markers")
 
         // 텍스트 스타일
         val textStyle = LabelStyles.from(
@@ -272,7 +303,7 @@ fun ResultScreen(
         }
 
         // 모든 추천 장소에 마커 표시
-        rec.places.forEach { place ->
+        allPlaces.forEach { place ->
             val selectedIndex = selectedPlaces.indexOfFirst { it.id == place.id }
             val isSelected = selectedIndex != -1
             val isTopPick = topIds.contains(place.id)
@@ -496,7 +527,7 @@ fun ResultScreen(
                                 var isMapInitialized = false
                                 override fun onMapReady(map: KakaoMap) {
                                     if (!isMapInitialized) {
-                                        rec.places.firstOrNull()?.let {
+                                        allPlaces.firstOrNull()?.let {
                                             map.moveCamera(
                                                 CameraUpdateFactory.newCenterPosition(LatLng.from(it.lat, it.lng))
                                             )
@@ -621,7 +652,7 @@ fun ResultScreen(
         // 🔹 추천 장소 리스트 (접기/펼치기 가능)
         item(key = "recommended_places") {
             RecommendedPlacesCard(
-                places = rec.places,
+                places = allPlaces,
                 gptReasons = rec.gptReasons,
                 aiTopIds = rec.aiTopIds,
                 topIds = topIds,
@@ -634,6 +665,69 @@ fun ResultScreen(
                     focusOn(place)
                 }
             )
+        }
+
+        // 🔹 더 많은 장소 보기 버튼
+        if (onExpandSearch != null && !hasExpanded && !isExpanding) {
+            item(key = "expand_search") {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    tonalElevation = 1.dp
+                ) {
+                    OutlinedButton(
+                        onClick = executeExpandSearch,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
+                            .height(48.dp),
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "🔍 더 많은 장소 보기",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+
+        // 🔹 확장 검색 진행 중 표시
+        if (isExpanding) {
+            item(key = "expanding_indicator") {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Text(
+                            "더 많은 장소를 검색하는 중...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
         }
 
         // 🔹 하단 액션 (T-Map 경로 생성 버튼 추가)
