@@ -2,12 +2,15 @@ package com.example.project_2.ui.main
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +22,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.example.project_2.data.KakaoLocalService
 import com.example.project_2.domain.model.*
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -82,7 +86,14 @@ fun MainScreen(
                 SearchCard(
                     value = ui.filter.region,
                     onValueChange = vm::setRegion,
-                    onDone = { focusManager.clearFocus() }
+                    onDone = { focusManager.clearFocus() },
+                    suggestions = ui.autocompleteSuggestions,
+                    showSuggestions = ui.showAutocomplete,
+                    onSuggestionClick = { suggestion ->
+                        vm.selectAutocompleteItem(suggestion)
+                        focusManager.clearFocus()
+                    },
+                    onDismissSuggestions = vm::hideAutocomplete
                 )
             }
 
@@ -209,31 +220,123 @@ fun MainScreen(
 private fun SearchCard(
     value: String,
     onValueChange: (String) -> Unit,
-    onDone: () -> Unit
+    onDone: () -> Unit,
+    suggestions: List<KakaoLocalService.AutocompleteResult>,
+    showSuggestions: Boolean,
+    onSuggestionClick: (KakaoLocalService.AutocompleteResult) -> Unit,
+    onDismissSuggestions: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        tonalElevation = 1.dp
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                placeholder = { Text("도시 또는 지역 검색…") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onDone() })
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                QuickRegionChip("서울") { onValueChange("서울") }
-                QuickRegionChip("부산") { onValueChange("부산") }
-                QuickRegionChip("제주") { onValueChange("제주") }
-                QuickRegionChip("강릉") { onValueChange("강릉") }
+    // Box로 감싸서 드롭다운을 상대 위치에 배치
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            tonalElevation = 1.dp
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    placeholder = { Text("도시 또는 지역 검색…") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        onDone()
+                        onDismissSuggestions()
+                    })
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QuickRegionChip("서울") {
+                        onValueChange("서울")
+                        onDismissSuggestions()
+                    }
+                    QuickRegionChip("부산") {
+                        onValueChange("부산")
+                        onDismissSuggestions()
+                    }
+                    QuickRegionChip("제주") {
+                        onValueChange("제주")
+                        onDismissSuggestions()
+                    }
+                    QuickRegionChip("강릉") {
+                        onValueChange("강릉")
+                        onDismissSuggestions()
+                    }
+                }
             }
         }
+
+        // 자동완성 드롭다운
+        if (showSuggestions && suggestions.isNotEmpty()) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 76.dp) // TextField 아래 위치
+                    .heightIn(max = 300.dp),
+                shape = RoundedCornerShape(12.dp),
+                tonalElevation = 4.dp,
+                shadowElevation = 4.dp
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(suggestions) { suggestion ->
+                        AutocompleteSuggestionItem(
+                            suggestion = suggestion,
+                            onClick = { onSuggestionClick(suggestion) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AutocompleteSuggestionItem(
+    suggestion: KakaoLocalService.AutocompleteResult,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                Icons.Default.LocationOn,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = suggestion.placeName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (suggestion.addressName.isNotBlank()) {
+                    Text(
+                        text = suggestion.addressName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        // 구분선 (마지막 항목 제외)
+        Spacer(modifier = Modifier.height(8.dp))
     }
 }
 

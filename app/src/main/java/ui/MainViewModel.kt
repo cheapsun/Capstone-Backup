@@ -11,13 +11,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlin.math.max
 
 data class MainUiState(
     val filter: FilterState = FilterState(),
     val loading: Boolean = false,
     val error: String? = null,
-    val lastResult: RecommendationResult? = null
+    val lastResult: RecommendationResult? = null,
+    // 자동완성 관련
+    val autocompleteSuggestions: List<KakaoLocalService.AutocompleteResult> = emptyList(),
+    val showAutocomplete: Boolean = false
 )
 
 class MainViewModel(
@@ -29,6 +34,10 @@ class MainViewModel(
 
     private val TAG = "MainVM"
     private var searchInFlight = false
+
+    // 자동완성 debounce용
+    private var autocompleteJob: Job? = null
+    private val AUTOCOMPLETE_DELAY = 300L // 300ms debounce
 
     /** 필터 업데이트 로그 */
     fun updateFilter(newFilter: FilterState) {
@@ -122,6 +131,52 @@ class MainViewModel(
     fun setRegion(region: String) {
         Log.d(TAG, "setRegion: $region")
         _ui.update { it.copy(filter = it.filter.copy(region = region)) }
+
+        // 자동완성 검색 트리거 (debounce 적용)
+        autocompleteJob?.cancel()
+        autocompleteJob = viewModelScope.launch {
+            delay(AUTOCOMPLETE_DELAY)
+            if (region.isNotBlank()) {
+                searchAutocomplete(region)
+            } else {
+                _ui.update { it.copy(autocompleteSuggestions = emptyList(), showAutocomplete = false) }
+            }
+        }
+    }
+
+    /** 자동완성 검색 */
+    private suspend fun searchAutocomplete(query: String) {
+        try {
+            val results = KakaoLocalService.searchKeywordForAutocomplete(query, size = 10)
+            Log.d(TAG, "searchAutocomplete: query=$query, results=${results.size}")
+            _ui.update {
+                it.copy(
+                    autocompleteSuggestions = results,
+                    showAutocomplete = results.isNotEmpty()
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "searchAutocomplete failed: ${e.message}", e)
+            _ui.update { it.copy(autocompleteSuggestions = emptyList(), showAutocomplete = false) }
+        }
+    }
+
+    /** 자동완성 항목 선택 */
+    fun selectAutocompleteItem(item: KakaoLocalService.AutocompleteResult) {
+        Log.d(TAG, "selectAutocompleteItem: ${item.placeName}")
+        _ui.update {
+            it.copy(
+                filter = it.filter.copy(region = item.placeName),
+                autocompleteSuggestions = emptyList(),
+                showAutocomplete = false
+            )
+        }
+        autocompleteJob?.cancel()
+    }
+
+    /** 자동완성 드롭다운 닫기 */
+    fun hideAutocomplete() {
+        _ui.update { it.copy(showAutocomplete = false) }
     }
 
     fun setDuration(duration: TripDuration) {

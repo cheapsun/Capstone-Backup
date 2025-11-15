@@ -119,6 +119,42 @@ object KakaoLocalService {
             .sortedBy { it.distanceMeters ?: Int.MAX_VALUE }
     }
 
+    /**
+     * 자동완성용 키워드 검색 (지역/장소명)
+     * - 좌표 제한 없이 전국 검색
+     * - 지역명 자동완성에 사용
+     */
+    suspend fun searchKeywordForAutocomplete(
+        query: String,
+        size: Int = 10
+    ): List<AutocompleteResult> {
+        if (query.isBlank()) return emptyList()
+        val svc = api ?: return emptyList()
+
+        return try {
+            val resp = svc.searchKeywordSimple(
+                query = query,
+                size = size
+            )
+            resp.documents.map { doc ->
+                AutocompleteResult(
+                    placeName = doc.place_name,
+                    addressName = doc.address_name ?: "",
+                    categoryName = doc.category_name ?: ""
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /** 자동완성 결과 데이터 클래스 */
+    data class AutocompleteResult(
+        val placeName: String,
+        val addressName: String,
+        val categoryName: String
+    )
+
     // -------- Private Helpers --------
 
     /** 우리 앱의 Category → Kakao category_group_code 매핑 */
@@ -176,6 +212,13 @@ object KakaoLocalService {
             @Query("size") size: Int = 15,
             @Query("sort") sort: String = "accuracy"
         ): PlaceResp
+
+        /** 자동완성용 키워드 검색 (좌표 제한 없음) */
+        @GET("v2/local/search/keyword.json")
+        suspend fun searchKeywordSimple(
+            @Query("query") query: String,
+            @Query("size") size: Int = 10
+        ): PlaceResp
     }
 
     // --- Address
@@ -191,6 +234,7 @@ object KakaoLocalService {
         val id: String,
         val place_name: String,
         val category_group_code: String?,
+        val category_name: String?,   // 카테고리명 (자동완성용)
         val x: String,              // 경도
         val y: String,              // 위도
         val address_name: String?,
