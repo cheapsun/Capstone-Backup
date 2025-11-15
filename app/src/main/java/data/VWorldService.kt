@@ -63,7 +63,8 @@ object VWorldService {
                 key = key,
                 domain = DOMAIN,
                 output = "application/json",
-                attrFilter = "sig_kor_nm:like:$regionName"
+                attrFilter = "sig_kor_nm:like:$regionName",
+                srsName = "EPSG:4326"  // WGS84 좌표계 요청
             )
 
             Log.d(TAG, "getAdminBoundary($regionName): ${response.features.size} features")
@@ -111,7 +112,8 @@ object VWorldService {
                 key = key,
                 domain = DOMAIN,
                 output = "application/json",
-                attrFilter = "full_nm:like:$fullQuery"
+                attrFilter = "full_nm:like:$fullQuery",
+                srsName = "EPSG:4326"  // WGS84 좌표계 요청
             )
 
             Log.d(TAG, "🔍 VWorld API 응답 (full_nm): ${response.features.size}개 features")
@@ -127,7 +129,8 @@ object VWorldService {
                     key = key,
                     domain = DOMAIN,
                     output = "application/json",
-                    attrFilter = "emd_kor_nm:like:$dongName"
+                    attrFilter = "emd_kor_nm:like:$dongName",
+                    srsName = "EPSG:4326"  // WGS84 좌표계 요청
                 )
 
                 Log.d(TAG, "🔍 VWorld API 응답 (emd_kor_nm): ${response2.features.size}개 features")
@@ -183,7 +186,8 @@ object VWorldService {
                 key = key,
                 domain = DOMAIN,
                 output = "application/json",
-                attrFilter = "full_nm:like:$regionName"
+                attrFilter = "full_nm:like:$regionName",
+                srsName = "EPSG:4326"  // WGS84 좌표계 요청
             )
 
             Log.d(TAG, "getDongLabels($regionName): ${response.features.size} features")
@@ -273,7 +277,8 @@ private interface VWorldApi {
         @Query("key") key: String,
         @Query("domain") domain: String,
         @Query("output") output: String,
-        @Query("attrFilter") attrFilter: String
+        @Query("attrFilter") attrFilter: String,
+        @Query("srsName") srsName: String? = null  // 좌표계 지정 (EPSG:4326 = WGS84)
     ): VWorldResponse
 }
 
