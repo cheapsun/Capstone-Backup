@@ -154,31 +154,36 @@ object KakaoLocalService {
 
     /**
      * 여행 앱에 적합한 지역/관광지인지 판별
-     * - 행정구역 (시/군/구)
-     * - 관광지/명소
-     * - 일반 가게/체인점 제외
+     * - 체인점만 제외하는 유연한 필터링
      */
     private fun isRegionOrTravelRelated(doc: PlaceDoc): Boolean {
+        val name = doc.place_name
         val category = doc.category_name ?: ""
         val address = doc.address_name ?: ""
-        val name = doc.place_name
 
-        // 1️⃣ 행정구역 (시/군/구로 끝나는 주소)
-        val isAdministrativeRegion = address.matches(Regex(".*[시군구]$"))
+        // 체인점 제외 (주요 프랜차이즈만)
+        val chainPatterns = listOf(
+            "스타벅스", "이디야", "투썸플레이스", "메가커피", "빽다방", "컴포즈커피",
+            "GS25", "CU", "세븐일레븐", "이마트24",
+            "맥도날드", "버거킹", "롯데리아", "KFC"
+        )
+        val isChainStore = chainPatterns.any { name.contains(it, ignoreCase = true) }
 
-        // 2️⃣ 관광/여행 관련 키워드
-        val travelKeywords = listOf("관광", "명소", "지명", "여행", "공원", "해수욕장", "해변", "산", "섬")
-        val isTravelRelated = travelKeywords.any { category.contains(it) }
+        if (isChainStore) return false
 
-        // 3️⃣ 제외할 카테고리 (일반 가게/체인점)
-        val excludeKeywords = listOf("음식점", "카페", "편의점", "마트", "주유소", "은행", "병원", "약국")
-        val isExcludedPlace = excludeKeywords.any { category.contains(it) }
+        // 우선순위 높은 항목들 (행정구역, 관광지)
+        val highPriorityKeywords = listOf(
+            "시청", "구청", "군청", "광역시", "특별시",
+            "관광", "명소", "공원", "해수욕장", "해변", "산", "섬", "폭포", "계곡"
+        )
+        val isHighPriority = highPriorityKeywords.any {
+            name.contains(it) || category.contains(it) || address.contains(it)
+        }
 
-        // 4️⃣ 체인점 패턴 제외
-        val chainPatterns = listOf("스타벅스", "이디야", "투썸", "메가커피", "GS25", "CU", "세븐일레븐")
-        val isChainStore = chainPatterns.any { name.contains(it) }
+        if (isHighPriority) return true
 
-        return (isAdministrativeRegion || isTravelRelated) && !isExcludedPlace && !isChainStore
+        // 나머지는 모두 허용 (체인점만 제외됨)
+        return true
     }
 
     /** 자동완성 결과 데이터 클래스 */
