@@ -115,9 +115,9 @@ fun RegionSelectBottomSheet(
             adminPolygons = VWorldService.getAdminBoundary(vworldQuery)
             Log.d("RegionSelect", "✅ 폴리곤 ${adminPolygons.size}개 로드")
 
-            // 4. VWorld API: 읍/면/동 라벨
-            dongLabels = VWorldService.getDongLabels(vworldQuery)
-            Log.d("RegionSelect", "✅ 동 라벨 ${dongLabels.size}개 로드")
+            // 4. 동 라벨 제거 (깔끔한 UI)
+            dongLabels = emptyList()
+            Log.d("RegionSelect", "✅ 동 라벨 표시 안 함 (시/군/구만 표시)")
 
             // 5. 지도 카메라 이동
             kakaoMap?.let { map ->
@@ -375,8 +375,8 @@ fun RegionSelectBottomSheet(
                                                             Log.d("RegionSelect", "🖱️ 역지오코딩 결과: $regionInfo")
 
                                                             if (regionInfo != null) {
-                                                                Log.d("RegionSelect", "🖱️ region1=${regionInfo.region1}, region2=${regionInfo.region2}, region3=${regionInfo.region3}")
-                                                                Log.d("RegionSelect", "🖱️ displayName=${regionInfo.displayName}, cityDistrictName=${regionInfo.cityDistrictName}")
+                                                                Log.d("RegionSelect", "🖱️ region1=${regionInfo.region1}, region2=${regionInfo.region2}")
+                                                                Log.d("RegionSelect", "🖱️ displayName=${regionInfo.displayName}")
 
                                                                 // ✅ 이전 상태 저장 (되돌리기용)
                                                                 previousRegionName = currentRegionName
@@ -387,56 +387,26 @@ fun RegionSelectBottomSheet(
                                                                 centerLat = latLng.latitude
                                                                 centerLng = latLng.longitude
 
-                                                                // ✅ 1. 먼저 읍/면/동 레벨 경계 시도 (region3가 있으면)
-                                                                val dongName = regionInfo.region3
-                                                                Log.d("RegionSelect", "🖱️ 읍/면/동 이름: '$dongName' (비어있음=${dongName.isBlank()})")
+                                                                // ✅ 시/군/구 레벨만 표시 (동까지 들어가지 않음)
+                                                                currentRegionName = regionInfo.displayName
+                                                                Log.d("RegionSelect", "🖱️ currentRegionName 업데이트: '$currentRegionName'")
 
-                                                                val emdongPolygon = if (dongName.isNotBlank()) {
-                                                                    Log.d("RegionSelect", "🖱️ VWorld API 호출: getEmdongBoundaryByName(dongName=$dongName, region=${regionInfo.cityDistrictName})")
-                                                                    VWorldService.getEmdongBoundaryByName(
-                                                                        dongName = dongName,
-                                                                        region = regionInfo.cityDistrictName
-                                                                    )
+                                                                val region1 = regionInfo.region1
+                                                                val region2 = regionInfo.region2
+                                                                val vworldQuery = if (region2.isNotBlank()) {
+                                                                    "$region1 $region2"
                                                                 } else {
-                                                                    Log.d("RegionSelect", "🖱️ 읍/면/동 이름이 비어있어서 스킵")
-                                                                    null
+                                                                    region1
                                                                 }
 
-                                                                Log.d("RegionSelect", "🖱️ 읍/면/동 폴리곤 결과: ${emdongPolygon != null}, 좌표수=${emdongPolygon?.coordinates?.size ?: 0}")
+                                                                Log.d("RegionSelect", "🖱️ VWorld API 호출: getAdminBoundary('$vworldQuery')")
+                                                                adminPolygons = VWorldService.getAdminBoundary(vworldQuery)
+                                                                Log.d("RegionSelect", "🖱️ 시/군/구 폴리곤: ${adminPolygons.size}개")
 
-                                                                if (emdongPolygon != null && emdongPolygon.coordinates.isNotEmpty()) {
-                                                                    // ✅ 읍/면/동 선택 성공
-                                                                    currentRegionName = "${regionInfo.displayName} ${dongName}"
-                                                                    Log.d("RegionSelect", "🖱️ currentRegionName 업데이트 (읍/면/동): '$currentRegionName'")
+                                                                // ✅ 동 라벨 제거 (깔끔한 UI)
+                                                                dongLabels = emptyList()
 
-                                                                    adminPolygons = listOf(emdongPolygon)
-                                                                    dongLabels = emptyList() // 읍/면/동 선택 시 라벨 숨김
-
-                                                                    Log.d("RegionSelect", "✅ 읍/면/동 선택 완료: $currentRegionName (폴리곤 ${emdongPolygon.coordinates.size}개 좌표)")
-                                                                } else {
-                                                                    // ✅ 읍/면/동 없으면 시/군/구 레벨로 폴백
-                                                                    Log.d("RegionSelect", "🖱️ 읍/면/동 폴리곤 없음, 시/군/구로 폴백")
-                                                                    currentRegionName = regionInfo.displayName
-                                                                    Log.d("RegionSelect", "🖱️ currentRegionName 업데이트 (시/군/구): '$currentRegionName'")
-
-                                                                    val region1 = regionInfo.region1
-                                                                    val region2 = regionInfo.region2
-                                                                    val vworldQuery = if (region2.isNotBlank()) {
-                                                                        "$region1 $region2"
-                                                                    } else {
-                                                                        region1
-                                                                    }
-
-                                                                    Log.d("RegionSelect", "🖱️ VWorld API 호출: getAdminBoundary('$vworldQuery')")
-                                                                    adminPolygons = VWorldService.getAdminBoundary(vworldQuery)
-                                                                    Log.d("RegionSelect", "🖱️ 시/군/구 폴리곤: ${adminPolygons.size}개")
-
-                                                                    Log.d("RegionSelect", "🖱️ VWorld API 호출: getDongLabels('$vworldQuery')")
-                                                                    dongLabels = VWorldService.getDongLabels(vworldQuery)
-                                                                    Log.d("RegionSelect", "🖱️ 동 라벨: ${dongLabels.size}개")
-
-                                                                    Log.d("RegionSelect", "✅ 시/군/구 선택 완료: $currentRegionName")
-                                                                }
+                                                                Log.d("RegionSelect", "✅ 시/군/구 선택 완료: $currentRegionName")
 
                                                                 Log.d("RegionSelect", "📍 지도 클릭 처리 완료: $currentRegionName (${adminPolygons.size}개 폴리곤)")
 
