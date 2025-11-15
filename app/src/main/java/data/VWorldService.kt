@@ -4,7 +4,6 @@ import android.util.Log
 import com.google.gson.annotations.SerializedName
 import okhttp3.OkHttpClient
 import okhttp3.ResponseBody
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -32,15 +31,7 @@ object VWorldService {
     fun init(vworldApiKey: String) {
         apiKey = vworldApiKey
 
-        // HTTP 로깅 인터셉터 추가 (API 디버깅용)
-        val loggingInterceptor = HttpLoggingInterceptor { message ->
-            Log.d("VWorld-HTTP", message)
-        }.apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        }
-
         val client = OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)  // 로깅 추가
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
