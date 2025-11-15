@@ -363,19 +363,21 @@ class RealTravelRepository(
      *
      * @param polygonCoords 폴리곤 좌표 리스트
      * @param categories 검색 카테고리
-     * @param gridSpacing grid 간격 (도 단위, 약 0.01 = 1km)
+     * @param gridSpacing grid 간격 (도 단위, 약 0.05 = 5km)
      * @param radiusPerPoint 각 grid 포인트당 검색 반경 (미터)
      * @param sizePerPoint 각 포인트당 최대 결과 수
+     * @param maxGridPoints 최대 grid 포인트 개수 (성능 제한)
      * @return 폴리곤 내부의 장소 리스트
      */
     suspend fun searchWithinPolygon(
         polygonCoords: List<com.example.project_2.data.LatLng>,
         categories: Set<Category>,
-        gridSpacing: Double = 0.015, // 약 1.5km
-        radiusPerPoint: Int = 2000,  // 2km 반경
-        sizePerPoint: Int = 10
+        gridSpacing: Double = 0.05,  // ✅ 약 5km (기존 1.5km에서 증가)
+        radiusPerPoint: Int = 3000,   // ✅ 3km 반경 (기존 2km에서 증가)
+        sizePerPoint: Int = 15,       // ✅ 각 포인트당 15개 (기존 10개에서 증가)
+        maxGridPoints: Int = 50       // ✅ 최대 50개 포인트로 제한
     ): List<Place> = withContext(Dispatchers.IO) {
-        Log.d("POLYGON_SEARCH", "searchWithinPolygon: ${polygonCoords.size} coords, spacing=$gridSpacing")
+        Log.d("POLYGON_SEARCH", "searchWithinPolygon: ${polygonCoords.size} coords, spacing=$gridSpacing, max=$maxGridPoints")
 
         if (polygonCoords.isEmpty()) {
             Log.w("POLYGON_SEARCH", "Empty polygon!")
@@ -395,9 +397,9 @@ class RealTravelRepository(
         // 2. Grid 포인트 생성
         val gridPoints = mutableListOf<Pair<Double, Double>>()
         var currentLat = minLat
-        while (currentLat <= maxLat) {
+        while (currentLat <= maxLat && gridPoints.size < maxGridPoints) {  // ✅ 최대 개수 체크
             var currentLng = minLng
-            while (currentLng <= maxLng) {
+            while (currentLng <= maxLng && gridPoints.size < maxGridPoints) {  // ✅ 최대 개수 체크
                 // 포인트가 폴리곤 내부에 있는지 확인
                 if (isPointInPolygon(currentLat, currentLng, polygonCoords)) {
                     gridPoints.add(currentLat to currentLng)
@@ -407,7 +409,7 @@ class RealTravelRepository(
             currentLat += gridSpacing
         }
 
-        Log.d("POLYGON_SEARCH", "Generated ${gridPoints.size} grid points")
+        Log.d("POLYGON_SEARCH", "Generated ${gridPoints.size} grid points (max: $maxGridPoints)")
 
         if (gridPoints.isEmpty()) {
             Log.w("POLYGON_SEARCH", "No grid points found inside polygon!")

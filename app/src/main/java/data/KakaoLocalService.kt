@@ -68,11 +68,17 @@ object KakaoLocalService {
         val doc = resp.documents.firstOrNull { it.region_type == "B" } // B = 법정동
             ?: resp.documents.firstOrNull() // fallback to any region
             ?: return null
+
+        val region1 = doc.region_1depth_name
+        val region2 = doc.region_2depth_name
+        val region3 = doc.region_3depth_name
+
         return RegionInfo(
-            region1 = doc.region_1depth_name,  // 시/도
-            region2 = doc.region_2depth_name,  // 시/군/구
-            region3 = doc.region_3depth_name,  // 읍/면/동
-            fullName = "${doc.region_1depth_name} ${doc.region_2depth_name} ${doc.region_3depth_name}".trim()
+            region1 = region1,
+            region2 = region2,
+            region3 = region3,
+            fullName = "$region1 $region2 $region3".trim(),
+            cityDistrictName = "$region1 $region2".trim()  // 시/군/구 레벨만
         )
     }
 
@@ -262,5 +268,6 @@ data class RegionInfo(
     val region1: String,  // 시/도
     val region2: String,  // 시/군/구
     val region3: String,  // 읍/면/동
-    val fullName: String  // 전체 이름
+    val fullName: String,  // 전체 이름 (시/도 + 시/군/구 + 읍/면/동)
+    val cityDistrictName: String  // 시/군/구 레벨만 (시/도 + 시/군/구)
 )
