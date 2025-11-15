@@ -94,7 +94,21 @@ class MainActivity : ComponentActivity() {
 
                             recResult?.let { rec ->
                                 val regionHint = uiState.filter.region.ifBlank { null }
-                                ResultScreen(rec, regionHint)
+
+                                // 🔹 검색 확장 콜백 생성
+                                val expandSearchCallback = uiState.lastSearchCenter?.let { (lat, lng) ->
+                                    mainVm.createExpandSearchCallback(
+                                        centerLat = lat,
+                                        centerLng = lng,
+                                        categories = uiState.lastSearchCategories
+                                    )
+                                }
+
+                                ResultScreen(
+                                    rec = rec,
+                                    regionHint = regionHint,
+                                    onExpandSearch = expandSearchCallback
+                                )
                             } ?: run {
                                 // 추천 결과가 없을 때는 검색 화면으로 유도
                                 LaunchedEffect(Unit) {

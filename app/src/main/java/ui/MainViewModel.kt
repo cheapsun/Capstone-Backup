@@ -24,7 +24,10 @@ data class MainUiState(
     val error: String? = null,
     val lastResult: RecommendationResult? = null,
     val autoCompleteSuggestions: List<String> = emptyList(),  // 자동완성 제안
-    val showAutoComplete: Boolean = false  // 자동완성 표시 여부
+    val showAutoComplete: Boolean = false,  // 자동완성 표시 여부
+    // 🔹 검색 확장을 위한 마지막 검색 정보
+    val lastSearchCenter: Pair<Double, Double>? = null,  // (lat, lng)
+    val lastSearchCategories: Set<Category> = emptySet()
 )
 
 class MainViewModel(
@@ -90,7 +93,15 @@ class MainViewModel(
                 }
             }.onSuccess { res ->
                 Log.d(TAG, "onSearchClicked: success, updating UI with ${res.places.size} places")
-                _ui.update { it.copy(loading = false, lastResult = res) }
+                // 결과와 함께 검색 정보도 저장 (확장 검색에 사용)
+                _ui.update {
+                    it.copy(
+                        loading = false,
+                        lastResult = res,
+                        lastSearchCenter = res.places.firstOrNull()?.let { p -> p.lat to p.lng },
+                        lastSearchCategories = f0.categories.ifEmpty { setOf(Category.FOOD) }
+                    )
+                }
                 searchInFlight = false
             }.onFailure { e ->
                 Log.e(TAG, "onSearchClicked: failed → ${e.message}", e)
