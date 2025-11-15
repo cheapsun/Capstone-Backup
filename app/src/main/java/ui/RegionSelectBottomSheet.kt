@@ -185,13 +185,15 @@ fun RegionSelectBottomSheet(
                 Log.d("RegionSelect", "🔹 폴리곤 $idx KakaoCoords 생성: ${kakaoCoords.size}개 (첫=${kakaoCoords.firstOrNull()}, 끝=${kakaoCoords.lastOrNull()})")
 
                 try {
-                    // ✅ 1단계: 반투명 채우기 (Polygon)
-                    val mapPoints = DotPoints(*kakaoCoords.toTypedArray())
+                    // ✅ 1단계: 반투명 채우기 (Polygon) - GeoJSON 방식
+                    val coordinates = kakaoCoords.joinToString(",") { "[${it.longitude},${it.latitude}]" }
+                    val geoJson = """{"type":"Polygon","coordinates":[[$coordinates]]}"""
+
                     val fillStyle = PolygonStyle.from(
                         Color.argb(40, 66, 133, 244)  // 반투명 파란색 채우기 (Material Blue)
                     )
 
-                    val polygonOptions = PolygonOptions.from(mapPoints, fillStyle)
+                    val polygonOptions = PolygonOptions.from(geoJson, fillStyle)
 
                     val filledPolygon = shapeManager.layer?.addPolygon(polygonOptions)
                     if (filledPolygon != null) {
