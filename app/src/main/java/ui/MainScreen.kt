@@ -8,6 +8,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.LocationOn
@@ -273,16 +275,18 @@ private fun SearchCard(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 76.dp) // TextField 아래 위치
-                    .heightIn(max = 300.dp),
+                    .padding(top = 140.dp) // TextField + QuickChips 아래 위치
+                    .heightIn(max = 400.dp),
                 shape = RoundedCornerShape(12.dp),
                 tonalElevation = 4.dp,
                 shadowElevation = 4.dp
             ) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    items(suggestions) { suggestion ->
+                    suggestions.forEach { suggestion ->
                         AutocompleteSuggestionItem(
                             suggestion = suggestion,
                             onClick = { onSuggestionClick(suggestion) }
