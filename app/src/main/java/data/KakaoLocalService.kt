@@ -120,9 +120,9 @@ object KakaoLocalService {
     }
 
     /**
-     * 자동완성용 지역 검색 (VWorld 검색 API 사용)
-     * - VWorld 검색 API: 행정구역만 검색 (type=DISTRICT)
-     * - 여행 앱에 최적화된 순수 행정구역 데이터
+     * 자동완성용 지역 검색 (VWorld 행정구역 검색 API 사용)
+     * - VWorld 검색: 행정구역 자동완성
+     * - 시도, 시군구 등 행정구역 검색
      */
     suspend fun searchKeywordForAutocomplete(
         query: String,
@@ -131,14 +131,14 @@ object KakaoLocalService {
         if (query.isBlank()) return emptyList()
 
         return try {
-            // VWorld DISTRICT 검색 (행정구역 전용)
-            val districtResults = VWorldService.searchDistrict(query, size)
+            // VWorld 행정구역 검색
+            val results = VWorldService.searchDistrict(query, size)
 
-            districtResults.map { district ->
+            results.map { district ->
                 AutocompleteResult(
                     placeName = district.title,
                     addressName = district.address,
-                    categoryName = district.category.ifBlank { "행정구역" }
+                    categoryName = district.category
                 )
             }
         } catch (e: Exception) {

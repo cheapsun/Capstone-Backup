@@ -79,7 +79,7 @@ object VWorldService {
                 query = query,
                 size = size,
                 page = 1,
-                category = "L1,L2",  // 시도 + 시군구 레벨만
+                category = null,  // null로 파라미터 제외
                 crs = "EPSG:4326",
                 format = "json",
                 errorFormat = "json"
@@ -130,7 +130,7 @@ object VWorldService {
             @Query("query") query: String,
             @Query("size") size: Int,
             @Query("page") page: Int,
-            @Query("category") category: String,
+            @Query("category") category: String?,  // Optional
             @Query("crs") crs: String,
             @Query("format") format: String,
             @Query("errorformat") errorFormat: String
