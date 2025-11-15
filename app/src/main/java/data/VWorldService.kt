@@ -119,7 +119,7 @@ object VWorldService {
             val response = svc.getFeature(
                 service = "WFS",
                 request = "GetFeature",
-                typename = "lt_c_emdong_info", // 읍면동 경계
+                typename = "lt_c_ademd_info", // ✅ 읍면동 경계 (수정됨)
                 key = key,
                 domain = DOMAIN,
                 output = "application/json",
@@ -136,7 +136,7 @@ object VWorldService {
                 val response2 = svc.getFeature(
                     service = "WFS",
                     request = "GetFeature",
-                    typename = "lt_c_emdong_info",
+                    typename = "lt_c_ademd_info",  // ✅ 수정됨
                     key = key,
                     domain = DOMAIN,
                     output = "application/json",
@@ -192,11 +192,11 @@ object VWorldService {
         return try {
             Log.d(TAG, "🏷️ getDongLabels 시작: regionName='$regionName'")
 
-            // 먼저 Raw response를 받아서 로깅 (디버깅용)
-            val rawResponse = svc.getFeatureRaw(
+            // ✅ 올바른 레이어 이름: lt_c_ademd_info (읍면동 정보)
+            val response = svc.getFeature(
                 service = "WFS",
                 request = "GetFeature",
-                typename = "lt_c_emdong_info",
+                typename = "lt_c_ademd_info",  // ✅ 수정됨 (lt_c_emdong_info → lt_c_ademd_info)
                 key = key,
                 domain = DOMAIN,
                 output = "application/json",
@@ -204,20 +204,20 @@ object VWorldService {
                 srsName = "EPSG:4326"
             )
 
-            Log.d(TAG, "🔍 Raw Response Code: ${rawResponse.code()}")
-            Log.d(TAG, "🔍 Raw Response Message: ${rawResponse.message()}")
+            Log.d(TAG, "🏷️ getDongLabels 응답: ${response.features.size}개 features")
 
-            val rawBody = rawResponse.body()?.string() ?: "null"
-            Log.d(TAG, "🔍 Raw Response Body (처음 500자): ${rawBody.take(500)}")
+            response.features.map { feature ->
+                val coords = extractCoordinates(feature.geometry)
+                val center = calculateCenter(coords)
 
-            if (!rawResponse.isSuccessful) {
-                Log.e(TAG, "❌ API 요청 실패: HTTP ${rawResponse.code()}")
-                return emptyList()
+                DongLabel(
+                    name = feature.properties.emd_kor_nm ?: "",
+                    centerLat = center.first,
+                    centerLng = center.second
+                )
+            }.also {
+                Log.d(TAG, "✅ getDongLabels 완료: ${it.size}개 라벨 생성")
             }
-
-            // 일단 빈 리스트 반환 (raw response 확인용)
-            Log.d(TAG, "✅ getDongLabels 완료: Raw response 로깅됨")
-            emptyList()
         } catch (e: Exception) {
             Log.e(TAG, "❌ getDongLabels 실패: ${e.message}", e)
             emptyList()
