@@ -49,15 +49,7 @@ import kotlinx.coroutines.launch
 fun RegionSelectBottomSheet(
     regionQuery: String,
     onDismiss: () -> Unit,
-    onWholeRegionSearch: (
-        regionName: String,
-        polygon: List<com.example.project_2.data.LatLng>
-    ) -> Unit,
-    onRadiusSearch: (
-        regionName: String,
-        centerLat: Double,
-        centerLng: Double
-    ) -> Unit
+    onRegionSelected: (String) -> Unit  // ✅ 단순화: 지역명만 반환
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -101,16 +93,13 @@ fun RegionSelectBottomSheet(
 
             Log.d("RegionSelect", "✅ 좌표 찾음: ($lat, $lng)")
 
-            // 2. 역지오코딩: 좌표 → 행정구역 이름 (간결한 이름 사용)
-            val regionInfo = KakaoLocalService.coord2regioncode(lat, lng)
-            currentRegionName = regionInfo?.displayName ?: regionQuery
+            // 2. 사용자가 입력한 검색어를 그대로 유지 (역지오코딩하지 않음)
+            currentRegionName = regionQuery
 
-            Log.d("RegionSelect", "✅ 행정구역: $currentRegionName (전체: ${regionInfo?.fullName})")
+            Log.d("RegionSelect", "✅ 지역명: $currentRegionName")
 
             // 3. VWorld API: 행정구역 경계 폴리곤
-            val region1 = regionInfo?.region1 ?: regionQuery
-            val region2 = regionInfo?.region2 ?: ""
-            val vworldQuery = if (region2.isNotBlank()) "$region1 $region2" else region1
+            val vworldQuery = regionQuery
 
             adminPolygons = VWorldService.getAdminBoundary(vworldQuery)
             Log.d("RegionSelect", "✅ 폴리곤 ${adminPolygons.size}개 로드")
@@ -510,22 +499,16 @@ fun RegionSelectBottomSheet(
                 }
             }
 
-            // 하단 버튼들
+            // 하단 버튼 - 선택 완료
             if (!isLoading && errorMessage == null) {
                 Spacer(Modifier.height(16.dp))
 
-                // 전체 지역 검색 버튼
+                // ✅ 지역 선택 완료 버튼 (검색 칸에 입력)
                 Button(
                     onClick = {
-                        val polygon = adminPolygons.firstOrNull()?.coordinates
-                        if (polygon != null && polygon.isNotEmpty()) {
-                            onWholeRegionSearch(currentRegionName, polygon)
-                            onDismiss()
-                        } else {
-                            Log.w("RegionSelect", "⚠️ 폴리곤 데이터 없음")
-                        }
+                        onRegionSelected(currentRegionName)
+                        onDismiss()
                     },
-                    enabled = adminPolygons.isNotEmpty(),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
@@ -534,31 +517,7 @@ fun RegionSelectBottomSheet(
                     )
                 ) {
                     Text(
-                        "$currentRegionName 전체로 검색",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                // 특정 위치 검색 버튼
-                OutlinedButton(
-                    onClick = {
-                        centerLat?.let { lat ->
-                            centerLng?.let { lng ->
-                                onRadiusSearch(currentRegionName, lat, lng)
-                                onDismiss()
-                            }
-                        }
-                    },
-                    enabled = centerLat != null && centerLng != null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                ) {
-                    Text(
-                        "$currentRegionName 주변 검색 (8km)",
+                        "'$currentRegionName' 선택",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
