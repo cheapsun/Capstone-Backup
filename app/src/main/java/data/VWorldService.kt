@@ -190,8 +190,8 @@ object VWorldService {
         return try {
             Log.d(TAG, "🏷️ getDongLabels 시작: regionName='$regionName'")
 
-            // ✅ 와일드카드 추가: "부산광역시 연제구" → "*부산광역시 연제구*"
-            // 이렇게 하면 "부산광역시 연제구 XXX동" 형식의 모든 동을 찾을 수 있음
+            // sig_kor_nm 필드를 사용하여 시/군/구로 읍면동 검색
+            // (getAdminBoundary와 동일한 방식)
             val response = svc.getFeature(
                 service = "WFS",
                 request = "GetFeature",
@@ -199,7 +199,7 @@ object VWorldService {
                 key = key,
                 domain = DOMAIN,
                 output = "application/json",
-                attrFilter = "full_nm:like:*$regionName*",  // ✅ 와일드카드 추가
+                attrFilter = "sig_kor_nm:like:$regionName",  // sig_kor_nm으로 변경 (와일드카드 제거)
                 srsName = "EPSG:4326"  // WGS84 좌표계 요청
             )
 
