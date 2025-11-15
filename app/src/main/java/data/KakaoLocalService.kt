@@ -122,8 +122,7 @@ object KakaoLocalService {
     /**
      * 자동완성용 키워드 검색 (지역/장소명)
      * - 좌표 제한 없이 전국 검색
-     * - 지역명 자동완성에 사용
-     * - 여행 앱에 맞게 지역/관광지 중심으로 필터링
+     * - 카카오 API 결과를 그대로 표시 (필터링 없음)
      */
     suspend fun searchKeywordForAutocomplete(
         query: String,
@@ -135,55 +134,19 @@ object KakaoLocalService {
         return try {
             val resp = svc.searchKeywordSimple(
                 query = query,
-                size = size * 2  // 필터링을 고려해 2배 요청
+                size = size
             )
-            resp.documents
-                .filter { doc -> isRegionOrTravelRelated(doc) }
-                .take(size)  // 필터링 후 원하는 개수만큼
-                .map { doc ->
-                    AutocompleteResult(
-                        placeName = doc.place_name,
-                        addressName = doc.address_name ?: "",
-                        categoryName = doc.category_name ?: ""
-                    )
-                }
+            // 필터링 없이 카카오 API 결과 그대로 반환
+            resp.documents.map { doc ->
+                AutocompleteResult(
+                    placeName = doc.place_name,
+                    addressName = doc.address_name ?: "",
+                    categoryName = doc.category_name ?: ""
+                )
+            }
         } catch (e: Exception) {
             emptyList()
         }
-    }
-
-    /**
-     * 여행 앱에 적합한 지역/관광지인지 판별
-     * - 체인점만 제외하는 유연한 필터링
-     */
-    private fun isRegionOrTravelRelated(doc: PlaceDoc): Boolean {
-        val name = doc.place_name
-        val category = doc.category_name ?: ""
-        val address = doc.address_name ?: ""
-
-        // 체인점 제외 (주요 프랜차이즈만)
-        val chainPatterns = listOf(
-            "스타벅스", "이디야", "투썸플레이스", "메가커피", "빽다방", "컴포즈커피",
-            "GS25", "CU", "세븐일레븐", "이마트24",
-            "맥도날드", "버거킹", "롯데리아", "KFC"
-        )
-        val isChainStore = chainPatterns.any { name.contains(it, ignoreCase = true) }
-
-        if (isChainStore) return false
-
-        // 우선순위 높은 항목들 (행정구역, 관광지)
-        val highPriorityKeywords = listOf(
-            "시청", "구청", "군청", "광역시", "특별시",
-            "관광", "명소", "공원", "해수욕장", "해변", "산", "섬", "폭포", "계곡"
-        )
-        val isHighPriority = highPriorityKeywords.any {
-            name.contains(it) || category.contains(it) || address.contains(it)
-        }
-
-        if (isHighPriority) return true
-
-        // 나머지는 모두 허용 (체인점만 제외됨)
-        return true
     }
 
     /** 자동완성 결과 데이터 클래스 */
