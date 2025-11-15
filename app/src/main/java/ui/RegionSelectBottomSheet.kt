@@ -104,9 +104,9 @@ fun RegionSelectBottomSheet(
             adminPolygons = VWorldService.getAdminBoundary(vworldQuery)
             Log.d("RegionSelect", "✅ 폴리곤 ${adminPolygons.size}개 로드")
 
-            // 4. 동 라벨 제거 (깔끔한 UI)
-            dongLabels = emptyList()
-            Log.d("RegionSelect", "✅ 동 라벨 표시 안 함 (시/군/구만 표시)")
+            // 4. 동 라벨 표시 (읍/면/동 이름)
+            dongLabels = VWorldService.getDongLabels(vworldQuery)
+            Log.d("RegionSelect", "✅ 동 라벨 ${dongLabels.size}개 로드")
 
             // 5. 지도 카메라 이동
             kakaoMap?.let { map ->
@@ -392,8 +392,10 @@ fun RegionSelectBottomSheet(
                                                                 adminPolygons = VWorldService.getAdminBoundary(vworldQuery)
                                                                 Log.d("RegionSelect", "🖱️ 시/군/구 폴리곤: ${adminPolygons.size}개")
 
-                                                                // ✅ 동 라벨 제거 (깔끔한 UI)
-                                                                dongLabels = emptyList()
+                                                                // ✅ 동 라벨 표시
+                                                                Log.d("RegionSelect", "🖱️ VWorld API 호출: getDongLabels('$vworldQuery')")
+                                                                dongLabels = VWorldService.getDongLabels(vworldQuery)
+                                                                Log.d("RegionSelect", "🖱️ 동 라벨: ${dongLabels.size}개")
 
                                                                 Log.d("RegionSelect", "✅ 시/군/구 선택 완료: $currentRegionName")
 
