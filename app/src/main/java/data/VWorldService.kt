@@ -82,6 +82,68 @@ object VWorldService {
     }
 
     /**
+     * 특정 읍/면/동 이름으로 경계 폴리곤 받기
+     * @param dongName 읍/면/동 이름 (예: "영등동")
+     * @param region 상위 지역명 (예: "전라북도 익산시", 검색 범위 좁히기용)
+     * @return 해당 읍/면/동 폴리곤 (null이면 찾지 못함)
+     */
+    suspend fun getEmdongBoundaryByName(dongName: String, region: String): AdminPolygon? {
+        val svc = api ?: return null
+        val key = apiKey ?: return null
+
+        return try {
+            // 읍/면/동 이름으로 검색 (상위 지역명 포함하여 검색 범위 좁히기)
+            val response = svc.getFeature(
+                service = "WFS",
+                request = "GetFeature",
+                typename = "lt_c_emdong_info", // 읍면동 경계
+                key = key,
+                domain = DOMAIN,
+                output = "application/json",
+                attrFilter = "full_nm:like:$region $dongName"  // "전라북도 익산시 영등동"
+            )
+
+            Log.d(TAG, "getEmdongBoundaryByName($dongName, $region): ${response.features.size} features")
+
+            if (response.features.isEmpty()) {
+                // 전체 이름 검색 실패 시 읍/면/동 이름만으로 재시도
+                val response2 = svc.getFeature(
+                    service = "WFS",
+                    request = "GetFeature",
+                    typename = "lt_c_emdong_info",
+                    key = key,
+                    domain = DOMAIN,
+                    output = "application/json",
+                    attrFilter = "emd_kor_nm:like:$dongName"
+                )
+
+                Log.d(TAG, "getEmdongBoundaryByName fallback: ${response2.features.size} features")
+
+                if (response2.features.isEmpty()) return null
+
+                val feature = response2.features.first()
+                val coords = extractCoordinates(feature.geometry)
+
+                return AdminPolygon(
+                    name = feature.properties.emd_kor_nm ?: dongName,
+                    coordinates = coords
+                )
+            }
+
+            val feature = response.features.first()
+            val coords = extractCoordinates(feature.geometry)
+
+            AdminPolygon(
+                name = feature.properties.emd_kor_nm ?: dongName,
+                coordinates = coords
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "getEmdongBoundaryByName failed: ${e.message}", e)
+            null
+        }
+    }
+
+    /**
      * 읍/면/동 목록과 중심 좌표 받기
      * @param regionName 지역명 (예: "광주")
      * @return 동 이름과 중심 좌표 리스트

@@ -73,12 +73,17 @@ object KakaoLocalService {
         val region2 = doc.region_2depth_name
         val region3 = doc.region_3depth_name
 
+        // ✅ 가장 간결한 이름: region2만 사용 (예: "익산시", "강남구")
+        // 단, region2가 비어있으면 region1 사용
+        val displayName = if (region2.isNotBlank()) region2 else region1
+
         return RegionInfo(
             region1 = region1,
             region2 = region2,
             region3 = region3,
             fullName = "$region1 $region2 $region3".trim(),
-            cityDistrictName = "$region1 $region2".trim()  // 시/군/구 레벨만
+            cityDistrictName = "$region1 $region2".trim(),  // 시/도 + 시/군/구
+            displayName = displayName  // 가장 간결한 이름 (시/군/구만)
         )
     }
 
@@ -265,9 +270,10 @@ object KakaoLocalService {
  * 행정구역 정보 (역지오코딩 결과)
  */
 data class RegionInfo(
-    val region1: String,  // 시/도
-    val region2: String,  // 시/군/구
-    val region3: String,  // 읍/면/동
-    val fullName: String,  // 전체 이름 (시/도 + 시/군/구 + 읍/면/동)
-    val cityDistrictName: String  // 시/군/구 레벨만 (시/도 + 시/군/구)
+    val region1: String,  // 시/도 (예: "전라북도")
+    val region2: String,  // 시/군/구 (예: "익산시")
+    val region3: String,  // 읍/면/동 (예: "영등동")
+    val fullName: String,  // 전체 이름 (예: "전라북도 익산시 영등동")
+    val cityDistrictName: String,  // 시/도 + 시/군/구 (예: "전라북도 익산시")
+    val displayName: String  // 가장 간결한 이름 (예: "익산시" 또는 "영등동")
 )

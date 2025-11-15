@@ -91,11 +91,11 @@ fun RegionSelectBottomSheet(
 
             Log.d("RegionSelect", "✅ 좌표 찾음: ($lat, $lng)")
 
-            // 2. 역지오코딩: 좌표 → 행정구역 이름 (시/군/구 레벨만)
+            // 2. 역지오코딩: 좌표 → 행정구역 이름 (간결한 이름 사용)
             val regionInfo = KakaoLocalService.coord2regioncode(lat, lng)
-            currentRegionName = regionInfo?.cityDistrictName ?: regionQuery
+            currentRegionName = regionInfo?.displayName ?: regionQuery
 
-            Log.d("RegionSelect", "✅ 행정구역: $currentRegionName (원본: ${regionInfo?.fullName})")
+            Log.d("RegionSelect", "✅ 행정구역: $currentRegionName (전체: ${regionInfo?.fullName})")
 
             // 3. VWorld API: 행정구역 경계 폴리곤
             val region1 = regionInfo?.region1 ?: regionQuery
@@ -133,11 +133,14 @@ fun RegionSelectBottomSheet(
             routeLineManager.layer?.removeAll()
             labelManager.layer?.removeAll()
 
-            Log.d("RegionSelect", "🎨 경계선/라벨 그리기 시작")
+            Log.d("RegionSelect", "🎨 경계선/라벨 그리기 시작 (${adminPolygons.size}개 폴리곤)")
 
             // 폴리곤 그리기 (경계선만 표시 - RouteLine 사용)
-            adminPolygons.forEach { polygon ->
-                if (polygon.coordinates.isEmpty()) return@forEach
+            adminPolygons.forEachIndexed { idx, polygon ->
+                if (polygon.coordinates.isEmpty()) {
+                    Log.w("RegionSelect", "⚠️ 폴리곤 $idx 좌표 없음: ${polygon.name}")
+                    return@forEachIndexed
+                }
 
                 // ✅ 닫힌 경로를 위해 첫 번째 좌표를 마지막에 추가
                 val kakaoCoords = polygon.coordinates.map {
@@ -147,21 +150,22 @@ fun RegionSelectBottomSheet(
                 }
 
                 try {
-                    // RouteLine을 사용하여 경계선 그리기
+                    // ✅ RouteLine을 사용하여 경계선 그리기 (훨씬 굵고 밝게)
                     val segment = RouteLineSegment.from(kakaoCoords)
                         .setStyles(
                             RouteLineStyles.from(
                                 RouteLineStyle.from(
-                                    6f,  // 선 두께 (더 굵게)
-                                    Color.argb(255, 66, 133, 244)  // 파란색 (불투명)
+                                    12f,  // 선 두께 (매우 굵게: 6f → 12f)
+                                    Color.argb(255, 255, 0, 0)  // 빨간색 (고대비, 불투명)
                                 )
                             )
                         )
 
                     val options = RouteLineOptions.from(segment)
-                    routeLineManager.layer?.addRouteLine(options)?.show()
+                    val routeLine = routeLineManager.layer?.addRouteLine(options)
+                    routeLine?.show()
 
-                    Log.d("RegionSelect", "✅ 경계선 그림: ${polygon.name}, ${kakaoCoords.size}개 좌표")
+                    Log.d("RegionSelect", "✅ 경계선 $idx 그림: ${polygon.name}, ${kakaoCoords.size}개 좌표, RouteLine=${routeLine != null}")
                 } catch (e: Exception) {
                     Log.e("RegionSelect", "❌ 경계선 그리기 실패: ${e.message}", e)
                 }
@@ -282,34 +286,51 @@ fun RegionSelectBottomSheet(
                                                                 latLng.longitude
                                                             )
                                                             if (regionInfo != null) {
-                                                                // 시/군/구 레벨만 표시
-                                                                currentRegionName = regionInfo.cityDistrictName
                                                                 centerLat = latLng.latitude
                                                                 centerLng = latLng.longitude
 
-                                                                Log.d("RegionSelect", "📍 지도 클릭: $currentRegionName")
+                                                                // ✅ 1. 먼저 읍/면/동 레벨 경계 시도 (region3가 있으면)
+                                                                val dongName = regionInfo.region3
+                                                                val emdongPolygon = if (dongName.isNotBlank()) {
+                                                                    VWorldService.getEmdongBoundaryByName(
+                                                                        dongName = dongName,
+                                                                        region = regionInfo.cityDistrictName
+                                                                    )
+                                                                } else null
 
-                                                                // ✅ VWorld API로 새 경계선 로드
-                                                                val region1 = regionInfo.region1
-                                                                val region2 = regionInfo.region2
-                                                                val vworldQuery = if (region2.isNotBlank()) {
-                                                                    "$region1 $region2"
+                                                                if (emdongPolygon != null && emdongPolygon.coordinates.isNotEmpty()) {
+                                                                    // ✅ 읍/면/동 선택 성공
+                                                                    currentRegionName = "${regionInfo.displayName} ${dongName}"
+                                                                    adminPolygons = listOf(emdongPolygon)
+                                                                    dongLabels = emptyList() // 읍/면/동 선택 시 라벨 숨김
+
+                                                                    Log.d("RegionSelect", "✅ 읍/면/동 선택: $currentRegionName")
                                                                 } else {
-                                                                    region1
+                                                                    // ✅ 읍/면/동 없으면 시/군/구 레벨로 폴백
+                                                                    currentRegionName = regionInfo.displayName
+                                                                    val region1 = regionInfo.region1
+                                                                    val region2 = regionInfo.region2
+                                                                    val vworldQuery = if (region2.isNotBlank()) {
+                                                                        "$region1 $region2"
+                                                                    } else {
+                                                                        region1
+                                                                    }
+
+                                                                    adminPolygons = VWorldService.getAdminBoundary(vworldQuery)
+                                                                    dongLabels = VWorldService.getDongLabels(vworldQuery)
+
+                                                                    Log.d("RegionSelect", "✅ 시/군/구 선택: $currentRegionName")
                                                                 }
 
-                                                                adminPolygons = VWorldService.getAdminBoundary(vworldQuery)
-                                                                dongLabels = VWorldService.getDongLabels(vworldQuery)
+                                                                Log.d("RegionSelect", "📍 지도 클릭: $currentRegionName (${adminPolygons.size}개 폴리곤)")
 
-                                                                Log.d("RegionSelect", "✅ 새 경계선 로드: ${adminPolygons.size}개 폴리곤, ${dongLabels.size}개 라벨")
-
-                                                                // ✅ 지도 카메라 이동
+                                                                // ✅ 지도 카메라 이동 (더 확대)
                                                                 map.moveCamera(
-                                                                    CameraUpdateFactory.newCenterPosition(latLng, 13)
+                                                                    CameraUpdateFactory.newCenterPosition(latLng, 15)
                                                                 )
                                                             }
                                                         } catch (e: Exception) {
-                                                            Log.e("RegionSelect", "역지오코딩 실패: ${e.message}")
+                                                            Log.e("RegionSelect", "❌ 지도 클릭 처리 실패: ${e.message}", e)
                                                         }
                                                     }
                                                 }
