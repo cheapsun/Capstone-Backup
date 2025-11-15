@@ -123,6 +123,7 @@ object KakaoLocalService {
      * 자동완성용 키워드 검색 (지역/장소명)
      * - 좌표 제한 없이 전국 검색
      * - 지역명 자동완성에 사용
+     * - 여행 앱에 맞게 지역/관광지 중심으로 필터링
      */
     suspend fun searchKeywordForAutocomplete(
         query: String,
@@ -134,18 +135,50 @@ object KakaoLocalService {
         return try {
             val resp = svc.searchKeywordSimple(
                 query = query,
-                size = size
+                size = size * 2  // 필터링을 고려해 2배 요청
             )
-            resp.documents.map { doc ->
-                AutocompleteResult(
-                    placeName = doc.place_name,
-                    addressName = doc.address_name ?: "",
-                    categoryName = doc.category_name ?: ""
-                )
-            }
+            resp.documents
+                .filter { doc -> isRegionOrTravelRelated(doc) }
+                .take(size)  // 필터링 후 원하는 개수만큼
+                .map { doc ->
+                    AutocompleteResult(
+                        placeName = doc.place_name,
+                        addressName = doc.address_name ?: "",
+                        categoryName = doc.category_name ?: ""
+                    )
+                }
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    /**
+     * 여행 앱에 적합한 지역/관광지인지 판별
+     * - 행정구역 (시/군/구)
+     * - 관광지/명소
+     * - 일반 가게/체인점 제외
+     */
+    private fun isRegionOrTravelRelated(doc: PlaceDoc): Boolean {
+        val category = doc.category_name ?: ""
+        val address = doc.address_name ?: ""
+        val name = doc.place_name
+
+        // 1️⃣ 행정구역 (시/군/구로 끝나는 주소)
+        val isAdministrativeRegion = address.matches(Regex(".*[시군구]$"))
+
+        // 2️⃣ 관광/여행 관련 키워드
+        val travelKeywords = listOf("관광", "명소", "지명", "여행", "공원", "해수욕장", "해변", "산", "섬")
+        val isTravelRelated = travelKeywords.any { category.contains(it) }
+
+        // 3️⃣ 제외할 카테고리 (일반 가게/체인점)
+        val excludeKeywords = listOf("음식점", "카페", "편의점", "마트", "주유소", "은행", "병원", "약국")
+        val isExcludedPlace = excludeKeywords.any { category.contains(it) }
+
+        // 4️⃣ 체인점 패턴 제외
+        val chainPatterns = listOf("스타벅스", "이디야", "투썸", "메가커피", "GS25", "CU", "세븐일레븐")
+        val isChainStore = chainPatterns.any { name.contains(it) }
+
+        return (isAdministrativeRegion || isTravelRelated) && !isExcludedPlace && !isChainStore
     }
 
     /** 자동완성 결과 데이터 클래스 */
