@@ -147,7 +147,7 @@ class MainViewModel(
     /** 자동완성 검색 */
     private suspend fun searchAutocomplete(query: String) {
         try {
-            val results = KakaoLocalService.searchKeywordForAutocomplete(query, size = 10)
+            val results = KakaoLocalService.searchKeywordForAutocomplete(query, size = 50)
             Log.d(TAG, "searchAutocomplete: query=$query, results=${results.size}")
             _ui.update {
                 it.copy(
