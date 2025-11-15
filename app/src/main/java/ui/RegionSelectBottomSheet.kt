@@ -237,11 +237,15 @@ fun RegionSelectBottomSheet(
     }
 
     // 🔹 BottomSheet UI
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { false }  // ✅ 모든 상태 변경 차단 = 드래그 불가
+    )
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = sheetState,
         dragHandle = null,  // 드래그 핸들 UI 제거
-        sheetGesturesEnabled = false,  // ✅ 드래그 제스처 완전 비활성화
         modifier = Modifier.fillMaxHeight(0.9f)
     ) {
         Column(
