@@ -120,9 +120,9 @@ object KakaoLocalService {
     }
 
     /**
-     * 자동완성용 지역 검색 (카카오 주소 검색 API 사용)
-     * - 카카오 주소 검색: 지역명/주소 검색
-     * - 여행 앱에 적합한 지역 데이터
+     * 자동완성용 지역 검색 (VWorld 검색 API 사용)
+     * - VWorld 검색 API: 행정구역만 검색 (type=DISTRICT)
+     * - 여행 앱에 최적화된 순수 행정구역 데이터
      */
     suspend fun searchKeywordForAutocomplete(
         query: String,
@@ -130,19 +130,17 @@ object KakaoLocalService {
     ): List<AutocompleteResult> {
         if (query.isBlank()) return emptyList()
 
-        val svc = api ?: return emptyList()
-
         return try {
-            // 카카오 주소 검색
-            val resp = svc.searchAddress(query)
+            // VWorld DISTRICT 검색 (행정구역 전용)
+            val districtResults = VWorldService.searchDistrict(query, size)
 
-            resp.documents.take(size).map { doc ->
+            districtResults.map { district ->
                 AutocompleteResult(
-                    placeName = doc.address_name ?: "",
-                    addressName = doc.address_name ?: "",
-                    categoryName = "지역"
+                    placeName = district.title,
+                    addressName = district.address,
+                    categoryName = district.category.ifBlank { "행정구역" }
                 )
-            }.filter { it.placeName.isNotBlank() }
+            }
         } catch (e: Exception) {
             emptyList()
         }
