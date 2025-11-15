@@ -58,7 +58,7 @@ class MainViewModel(
         searchInFlight = true
 
         val f0 = _ui.value.filter
-        val polygons = _ui.value.regionPolygons
+        var polygons = _ui.value.regionPolygons
 
         viewModelScope.launch {
             Log.d(TAG, "onSearchClicked: start, filter=$f0, polygons=${polygons.size}")
@@ -70,6 +70,23 @@ class MainViewModel(
 
                 val cats = if (f0.categories.isEmpty()) setOf(Category.FOOD) else f0.categories
                 val f = f0.copy(categories = cats, region = region)
+
+                // ✅ 폴리곤이 없으면 VWorld API로 조회 시도
+                if (polygons.isEmpty()) {
+                    Log.d(TAG, "No polygon saved, fetching from VWorld API for: $region")
+                    try {
+                        val fetchedPolygons = com.example.project_2.data.VWorldService.getAdminBoundary(region)
+                        if (fetchedPolygons.isNotEmpty()) {
+                            Log.d(TAG, "Fetched ${fetchedPolygons.size} polygons from VWorld")
+                            polygons = fetchedPolygons
+                        } else {
+                            Log.d(TAG, "No polygons found for: $region")
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to fetch polygons: ${e.message}", e)
+                        // 실패하면 polygons는 비어있는 상태로 유지
+                    }
+                }
 
                 // ✅ 폴리곤이 있으면 폴리곤 기반 검색, 없으면 중심점 검색
                 if (polygons.isNotEmpty()) {
@@ -83,7 +100,7 @@ class MainViewModel(
 
                     realRepo.recommendPolygonWithGpt(filter = f, polygonCoords = allCoords)
                 } else {
-                    Log.d(TAG, "Using center-based search (no polygon)")
+                    Log.d(TAG, "Using center-based search (no polygon found)")
 
                     // 지역 좌표 조회
                     val center = KakaoLocalService.geocode(region)
