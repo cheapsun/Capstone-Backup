@@ -60,11 +60,11 @@ class GptRerankUseCase(
         val duration  = safeToText(filter.duration)
 
         val candidatesText = buildString {
-            items.forEachIndexed { idx, p ->
+            items.forEach { p ->
                 val cat = runCatching { safeToText(p.category) }.getOrElse { "-" }
                 val rating = runCatching { p.rating?.toString() ?: "-" }.getOrElse { "-" }
                 val dist = runCatching { p.distanceMeters?.toString() ?: "-" }.getOrElse { "-" }
-                appendLine("- origIndex=$idx, id=${p.id}, name=${p.name}, cat=$cat, rating=$rating, distM=$dist")
+                appendLine("- id=${p.id}, name=${p.name}, cat=$cat, rating=$rating, distM=$dist")
             }
         }
 
