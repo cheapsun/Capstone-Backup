@@ -55,6 +55,12 @@ android {
             value = "\"${localProps.getProperty("TMAP_API_KEY", "")}\""
         )
 
+        buildConfigField(
+            type = "String",
+            name = "VWORLD_API_KEY",
+            value = "\"${localProps.getProperty("VWORLD_API_KEY", "")}\""
+        )
+
         vectorDrawables { useSupportLibrary = true }
     }
 

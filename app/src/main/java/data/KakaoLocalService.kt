@@ -120,56 +120,27 @@ object KakaoLocalService {
     }
 
     /**
-     * 자동완성용 지역 검색 (주소 검색 우선)
-     * - 주소 검색 API: 행정구역(시/군/구) 중심 - 여행 앱에 적합
-     * - 키워드 검색 API: 관광지/장소 보조
+     * 자동완성용 지역 검색 (VWorld API 사용)
+     * - VWorld 검색 API: 행정구역만 검색 (type=DISTRICT)
+     * - 여행 앱에 최적화된 순수 행정구역 데이터
      */
     suspend fun searchKeywordForAutocomplete(
         query: String,
         size: Int = 10
     ): List<AutocompleteResult> {
         if (query.isBlank()) return emptyList()
-        val svc = api ?: return emptyList()
 
         return try {
-            // 1️⃣ 주소 검색 우선 (행정구역)
-            val addressResults = try {
-                val addressResp = svc.searchAddress(query)
-                addressResp.documents.map { doc ->
-                    AutocompleteResult(
-                        placeName = doc.address_name ?: "",
-                        addressName = doc.address_name ?: "",
-                        categoryName = "지역"
-                    )
-                }.filter { it.placeName.isNotBlank() }
-            } catch (e: Exception) {
-                emptyList()
-            }
+            // VWorld DISTRICT 검색 (행정구역 전용)
+            val districtResults = VWorldService.searchDistrict(query, size)
 
-            // 2️⃣ 주소 검색 결과가 충분하면 반환
-            if (addressResults.size >= size) {
-                return addressResults.take(size)
-            }
-
-            // 3️⃣ 부족하면 키워드 검색으로 보완
-            val keywordResults = try {
-                val keywordResp = svc.searchKeywordSimple(
-                    query = query,
-                    size = size - addressResults.size
+            districtResults.map { district ->
+                AutocompleteResult(
+                    placeName = district.title,
+                    addressName = district.address,
+                    categoryName = district.category.ifBlank { "행정구역" }
                 )
-                keywordResp.documents.map { doc ->
-                    AutocompleteResult(
-                        placeName = doc.place_name,
-                        addressName = doc.address_name ?: "",
-                        categoryName = doc.category_name ?: ""
-                    )
-                }
-            } catch (e: Exception) {
-                emptyList()
             }
-
-            // 주소 검색 결과 우선, 키워드 검색 보조
-            (addressResults + keywordResults).take(size)
         } catch (e: Exception) {
             emptyList()
         }

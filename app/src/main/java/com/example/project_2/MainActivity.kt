@@ -27,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.project_2.data.KakaoLocalService
+import com.example.project_2.data.VWorldService
 import com.example.project_2.data.openai.OpenAiService
 import com.example.project_2.data.weather.WeatherService
 import com.example.project_2.data.route.TmapPedestrianService
@@ -55,6 +56,7 @@ class MainActivity : ComponentActivity() {
         // ===== SDK / API 키 초기화 =====
         KakaoMapSdk.init(this, BuildConfig.KAKAO_NATIVE_APP_KEY)
         KakaoLocalService.init(BuildConfig.KAKAO_REST_API_KEY)
+        VWorldService.init(BuildConfig.VWORLD_API_KEY)  // ✅ VWorld 행정구역 검색 API
         WeatherService.init(BuildConfig.OPENWEATHER_API_KEY)
         OpenAiService.init(BuildConfig.OPENAI_API_KEY)
         TmapPedestrianService.init(BuildConfig.TMAP_API_KEY)  // ✅ T-Map 보행자 경로 API
