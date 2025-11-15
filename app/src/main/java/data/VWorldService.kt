@@ -75,11 +75,11 @@ object VWorldService {
                 service = "search",
                 request = "search",
                 version = "2.0",
-                type = "district",  // 소문자
+                type = "district",
                 query = query,
                 size = size,
                 page = 1,
-                category = null,  // null로 파라미터 제외
+                category = "L2",  // 시군구 레벨만
                 crs = "EPSG:4326",
                 format = "json",
                 errorFormat = "json"
@@ -92,14 +92,14 @@ object VWorldService {
 
             // 응답에서 결과 추출
             val items = resp.response?.result?.items ?: emptyList()
-            Log.d(TAG, "searchDistrict: Found ${items.size} items")
+            Log.d(TAG, "searchDistrict: Found ${items.size} items from API")
 
-            // 각 항목의 category 로깅
+            // 디버깅: 처음 5개 항목 로깅
             items.take(5).forEach { item ->
                 Log.d(TAG, "  - title=${item.title}, category=${item.category}, address=${item.address}")
             }
 
-            val allResults = items.map { item ->
+            val results = items.map { item ->
                 DistrictResult(
                     title = item.title ?: "",
                     category = item.category ?: "",
@@ -107,15 +107,7 @@ object VWorldService {
                 )
             }.filter { it.title.isNotBlank() }
 
-            Log.d(TAG, "searchDistrict: ${allResults.size} results after blank filter")
-
-            // 시도(L1) 또는 시군구(L2)만 필터링
-            val results = allResults.filter {
-                val cat = it.category
-                cat.startsWith("L1") || cat.startsWith("L2") || cat == "L1" || cat == "L2"
-            }
-
-            Log.d(TAG, "searchDistrict: Returning ${results.size} results after L1/L2 filtering")
+            Log.d(TAG, "searchDistrict: Returning ${results.size} results")
             results
         } catch (e: Exception) {
             Log.e(TAG, "searchDistrict: Error - ${e.message}", e)
