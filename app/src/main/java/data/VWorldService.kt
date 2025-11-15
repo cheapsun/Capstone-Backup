@@ -3,7 +3,9 @@ package com.example.project_2.data
 import android.util.Log
 import com.google.gson.annotations.SerializedName
 import okhttp3.OkHttpClient
+import okhttp3.ResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
@@ -190,33 +192,32 @@ object VWorldService {
         return try {
             Log.d(TAG, "🏷️ getDongLabels 시작: regionName='$regionName'")
 
-            // sig_kor_nm 필드를 사용하여 시/군/구로 읍면동 검색
-            // (getAdminBoundary와 동일한 방식)
-            val response = svc.getFeature(
+            // 먼저 Raw response를 받아서 로깅 (디버깅용)
+            val rawResponse = svc.getFeatureRaw(
                 service = "WFS",
                 request = "GetFeature",
-                typename = "lt_c_emdong_info", // 읍면동 경계
+                typename = "lt_c_emdong_info",
                 key = key,
                 domain = DOMAIN,
                 output = "application/json",
-                attrFilter = "sig_kor_nm:like:$regionName",  // sig_kor_nm으로 변경 (와일드카드 제거)
-                srsName = "EPSG:4326"  // WGS84 좌표계 요청
+                attrFilter = "sig_kor_nm:like:$regionName",
+                srsName = "EPSG:4326"
             )
 
-            Log.d(TAG, "🏷️ getDongLabels 응답: ${response.features.size}개 features")
+            Log.d(TAG, "🔍 Raw Response Code: ${rawResponse.code()}")
+            Log.d(TAG, "🔍 Raw Response Message: ${rawResponse.message()}")
 
-            response.features.map { feature ->
-                val coords = extractCoordinates(feature.geometry)
-                val center = calculateCenter(coords)
+            val rawBody = rawResponse.body()?.string() ?: "null"
+            Log.d(TAG, "🔍 Raw Response Body (처음 500자): ${rawBody.take(500)}")
 
-                DongLabel(
-                    name = feature.properties.emd_kor_nm ?: "",
-                    centerLat = center.first,
-                    centerLng = center.second
-                )
-            }.also {
-                Log.d(TAG, "✅ getDongLabels 완료: ${it.size}개 라벨 생성")
+            if (!rawResponse.isSuccessful) {
+                Log.e(TAG, "❌ API 요청 실패: HTTP ${rawResponse.code()}")
+                return emptyList()
             }
+
+            // 일단 빈 리스트 반환 (raw response 확인용)
+            Log.d(TAG, "✅ getDongLabels 완료: Raw response 로깅됨")
+            emptyList()
         } catch (e: Exception) {
             Log.e(TAG, "❌ getDongLabels 실패: ${e.message}", e)
             emptyList()
@@ -295,6 +296,19 @@ private interface VWorldApi {
         @Query("attrFilter") attrFilter: String,
         @Query("srsName") srsName: String? = null  // 좌표계 지정 (EPSG:4326 = WGS84)
     ): VWorldResponse
+
+    // Raw response를 String으로 받기 (디버깅용)
+    @GET("wfs")
+    suspend fun getFeatureRaw(
+        @Query("service") service: String,
+        @Query("request") request: String,
+        @Query("typename") typename: String,
+        @Query("key") key: String,
+        @Query("domain") domain: String,
+        @Query("output") output: String,
+        @Query("attrFilter") attrFilter: String,
+        @Query("srsName") srsName: String? = null
+    ): Response<ResponseBody>
 }
 
 // -------- Data Models --------
