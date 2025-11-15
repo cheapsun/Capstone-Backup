@@ -4,6 +4,10 @@ import android.graphics.Color
 import android.util.Log
 import android.view.ViewGroup
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -303,6 +307,11 @@ fun RegionSelectBottomSheet(
                                         object : KakaoMapReadyCallback() {
                                             override fun onMapReady(map: KakaoMap) {
                                                 kakaoMap = map
+
+                                                // ✅ 지도 제스처 활성화
+                                                map.isCompassEnabled = false  // 나침반 비활성화 (불필요)
+                                                map.isScaleMeterEnabled = true  // 축척 표시
+
                                                 centerLat?.let { lat ->
                                                     centerLng?.let { lng ->
                                                         map.moveCamera(
@@ -411,6 +420,80 @@ fun RegionSelectBottomSheet(
                             },
                             modifier = Modifier.fillMaxSize()
                         )
+
+                        // ✅ 지도 컨트롤 버튼들 (오른쪽 하단)
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // 확대 버튼
+                            FloatingActionButton(
+                                onClick = {
+                                    kakaoMap?.let { map ->
+                                        val currentZoom = map.cameraPosition?.zoomLevel ?: 13
+                                        map.moveCamera(
+                                            CameraUpdateFactory.zoomTo(currentZoom + 1)
+                                        )
+                                    }
+                                },
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "확대"
+                                )
+                            }
+
+                            // 축소 버튼
+                            FloatingActionButton(
+                                onClick = {
+                                    kakaoMap?.let { map ->
+                                        val currentZoom = map.cameraPosition?.zoomLevel ?: 13
+                                        map.moveCamera(
+                                            CameraUpdateFactory.zoomTo(currentZoom - 1)
+                                        )
+                                    }
+                                },
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Remove,
+                                    contentDescription = "축소"
+                                )
+                            }
+
+                            // 현재 위치로 돌아가기 버튼
+                            FloatingActionButton(
+                                onClick = {
+                                    kakaoMap?.let { map ->
+                                        centerLat?.let { lat ->
+                                            centerLng?.let { lng ->
+                                                map.moveCamera(
+                                                    CameraUpdateFactory.newCenterPosition(
+                                                        LatLng.from(lat, lng),
+                                                        13
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MyLocation,
+                                    contentDescription = "원래 위치로"
+                                )
+                            }
+                        }
                     }
                 }
             }
