@@ -61,6 +61,21 @@ object KakaoLocalService {
         return lat to lng
     }
 
+    /** 좌표를 행정구역 정보로 변환 (역지오코딩). 실패 시 null */
+    suspend fun coord2regioncode(lat: Double, lng: Double): RegionInfo? {
+        val svc = api ?: return null
+        val resp = svc.coord2regioncode(x = lng, y = lat)
+        val doc = resp.documents.firstOrNull { it.region_type == "B" } // B = 법정동
+            ?: resp.documents.firstOrNull() // fallback to any region
+            ?: return null
+        return RegionInfo(
+            region1 = doc.region_1depth_name,  // 시/도
+            region2 = doc.region_2depth_name,  // 시/군/구
+            region3 = doc.region_3depth_name,  // 읍/면/동
+            fullName = "${doc.region_1depth_name} ${doc.region_2depth_name} ${doc.region_3depth_name}".trim()
+        )
+    }
+
     /**
      * 카테고리 기반 장소 검색.
      * - centerLat/centerLng 기준 radius(m) 내 결과를 category_group_code로 필터
@@ -157,6 +172,12 @@ object KakaoLocalService {
             @Query("query") query: String
         ): AddressResp
 
+        @GET("v2/local/geo/coord2regioncode.json")
+        suspend fun coord2regioncode(
+            @Query("x") x: Double,  // 경도
+            @Query("y") y: Double   // 위도
+        ): RegionCodeResp
+
         @GET("v2/local/search/category.json")
         suspend fun searchByCategory(
             @Query("category_group_code") categoryGroupCode: String,
@@ -183,6 +204,15 @@ object KakaoLocalService {
     private data class AddressDoc(
         val x: String, // 경도
         val y: String  // 위도
+    )
+
+    // --- Region Code (coord2regioncode)
+    private data class RegionCodeResp(val documents: List<RegionCodeDoc> = emptyList())
+    private data class RegionCodeDoc(
+        val region_type: String,        // "B" = 법정동, "H" = 행정동
+        val region_1depth_name: String, // 시/도
+        val region_2depth_name: String, // 시/군/구
+        val region_3depth_name: String  // 읍/면/동
     )
 
     // --- Place
@@ -224,3 +254,13 @@ object KakaoLocalService {
         }
     }
 }
+
+/**
+ * 행정구역 정보 (역지오코딩 결과)
+ */
+data class RegionInfo(
+    val region1: String,  // 시/도
+    val region2: String,  // 시/군/구
+    val region3: String,  // 읍/면/동
+    val fullName: String  // 전체 이름
+)

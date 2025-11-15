@@ -7,8 +7,6 @@ import com.example.project_2.data.KakaoLocalService
 import com.example.project_2.domain.model.*
 import com.example.project_2.domain.repo.TravelRepository
 import com.example.project_2.domain.repo.RealTravelRepository
-import com.example.project_2.domain.SubRegionsData
-import com.example.project_2.domain.SearchType
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +25,9 @@ data class MainUiState(
     val showAutoComplete: Boolean = false,  // 자동완성 표시 여부
     // 🔹 검색 확장을 위한 마지막 검색 정보
     val lastSearchCenter: Pair<Double, Double>? = null,  // (lat, lng)
-    val lastSearchCategories: Set<Category> = emptySet()
+    val lastSearchCategories: Set<Category> = emptySet(),
+    // 🔹 지역 선택 BottomSheet
+    val showRegionSelectSheet: Boolean = false
 )
 
 class MainViewModel(
@@ -47,7 +47,7 @@ class MainViewModel(
         _ui.update { it.copy(filter = newFilter) }
     }
 
-    /** "맞춤 루트 생성하기" → WIDE/NARROW 판단 후 GPT 재랭크 */
+    /** "맞춤 루트 생성하기" → 단일 중심점 검색 (기본 전략) */
     fun onSearchClicked() {
         if (searchInFlight) {
             Log.w(TAG, "onSearchClicked: already searching, ignored")
@@ -64,33 +64,25 @@ class MainViewModel(
                 val region = f0.region.ifBlank { "서울" }
                 Log.d(TAG, "Region: $region")
 
-                // ===== STEP 1: WIDE/NARROW 판단 =====
-                val searchType = SubRegionsData.determineSearchType(region)
-                Log.d(TAG, "Search type determined: $searchType")
-
                 val cats = if (f0.categories.isEmpty()) setOf(Category.FOOD) else f0.categories
                 val f = f0.copy(categories = cats, region = region)
 
-                // ===== STEP 2: 검색 전략 실행 =====
-                when (searchType) {
-                    SearchType.WIDE -> {
-                        // 다중 중심점 검색
-                        Log.d(TAG, "Executing WIDE search strategy")
+                // 지역 좌표 조회
+                val center = KakaoLocalService.geocode(region)
+                    ?: KakaoLocalService.geocode("서울")
+                    ?: error("지역 좌표를 찾을 수 없습니다: $region")
 
-                        val subRegions = SubRegionsData.getSubRegions(region)
-                        if (subRegions == null) {
-                            Log.w(TAG, "No sub-regions found for $region, fallback to NARROW")
-                            executeNarrowSearch(f)
-                        } else {
-                            executeWideSearch(f, subRegions)
-                        }
-                    }
-                    SearchType.NARROW -> {
-                        // 단일 중심점 검색
-                        Log.d(TAG, "Executing NARROW search strategy")
-                        executeNarrowSearch(f)
-                    }
-                }
+                val (lat, lng) = center
+                Log.d(TAG, "Geocode result: ($lat, $lng)")
+
+                // 단일 중심점 검색 (3km 반경)
+                repo.recommendWithGpt(
+                    filter = f,
+                    centerLat = lat,
+                    centerLng = lng,
+                    radiusMeters = 3000,
+                    candidateSize = 15
+                )
             }.onSuccess { res ->
                 Log.d(TAG, "onSearchClicked: success, updating UI with ${res.places.size} places")
                 // 결과와 함께 검색 정보도 저장 (확장 검색에 사용)
@@ -109,50 +101,6 @@ class MainViewModel(
                 searchInFlight = false
             }
         }
-    }
-
-    /**
-     * WIDE 검색 전략 실행 (다중 중심점)
-     */
-    private suspend fun executeWideSearch(
-        filter: FilterState,
-        subRegions: List<String>
-    ): RecommendationResult {
-        Log.d(TAG, "executeWideSearch: subRegions=$subRegions")
-
-        // RealTravelRepository로 캐스팅 (recommendWideWithGpt 메서드 사용)
-        val realRepo = repo as? RealTravelRepository
-            ?: error("Repository does not support WIDE search")
-
-        return realRepo.recommendWideWithGpt(
-            filter = filter,
-            subRegions = subRegions,
-            radiusMeters = 3000,
-            candidateSizePerRegion = 5
-        )
-    }
-
-    /**
-     * NARROW 검색 전략 실행 (단일 중심점)
-     */
-    private suspend fun executeNarrowSearch(filter: FilterState): RecommendationResult {
-        val region = filter.region
-        Log.d(TAG, "executeNarrowSearch: region=$region")
-
-        val center = KakaoLocalService.geocode(region)
-            ?: KakaoLocalService.geocode("서울")
-            ?: error("지역 좌표를 찾을 수 없습니다: $region")
-
-        val (lat, lng) = center
-        Log.d(TAG, "Geocode result: ($lat, $lng)")
-
-        return repo.recommendWithGpt(
-            filter = filter,
-            centerLat = lat,
-            centerLng = lng,
-            radiusMeters = 3000,
-            candidateSize = 15
-        )
     }
 
     /** 기본 추천 (GPT 없이) */
@@ -235,12 +183,7 @@ class MainViewModel(
                 extractRegionName(place.address ?: "")
             }.distinct().take(5)
 
-            // 광역 도시 목록도 함께 제공
-            val wideRegions = SubRegionsData.getAllWideRegions()
-                .filter { it.contains(query, ignoreCase = true) }
-                .take(3)
-
-            (wideRegions + regionNames).distinct().take(5)
+            regionNames
         } catch (e: Exception) {
             Log.e(TAG, "AutoComplete error: ${e.message}", e)
             emptyList()
@@ -347,6 +290,125 @@ class MainViewModel(
                 newRadius = 5000,  // 5km로 확장
                 excludeIds = excludeIds
             )
+        }
+    }
+
+    // ===== 지역 선택 BottomSheet 관련 =====
+
+    /**
+     * 지역 선택 BottomSheet 표시
+     */
+    fun showRegionSelectSheet() {
+        Log.d(TAG, "showRegionSelectSheet")
+        _ui.update { it.copy(showRegionSelectSheet = true) }
+    }
+
+    /**
+     * 지역 선택 BottomSheet 숨기기
+     */
+    fun hideRegionSelectSheet() {
+        Log.d(TAG, "hideRegionSelectSheet")
+        _ui.update { it.copy(showRegionSelectSheet = false) }
+    }
+
+    /**
+     * 전체 지역 검색 (폴리곤 기반)
+     *
+     * @param regionName 지역명 (예: "광주광역시 동구")
+     * @param polygon 폴리곤 좌표 리스트
+     */
+    fun onWholeRegionSearch(
+        regionName: String,
+        polygon: List<com.example.project_2.data.LatLng>
+    ) {
+        if (searchInFlight) {
+            Log.w(TAG, "onWholeRegionSearch: already searching, ignored")
+            return
+        }
+        searchInFlight = true
+
+        val f0 = _ui.value.filter
+        viewModelScope.launch {
+            Log.d(TAG, "onWholeRegionSearch: $regionName, ${polygon.size} coords")
+            _ui.update { it.copy(loading = true, error = null, showRegionSelectSheet = false) }
+
+            runCatching {
+                val cats = if (f0.categories.isEmpty()) setOf(Category.FOOD) else f0.categories
+                val f = f0.copy(categories = cats, region = regionName)
+
+                val realRepo = repo as? RealTravelRepository
+                    ?: error("Repository does not support polygon search")
+
+                realRepo.recommendPolygonWithGpt(filter = f, polygonCoords = polygon)
+            }.onSuccess { res ->
+                Log.d(TAG, "onWholeRegionSearch: success, ${res.places.size} places")
+                _ui.update {
+                    it.copy(
+                        loading = false,
+                        lastResult = res,
+                        lastSearchCenter = res.places.firstOrNull()?.let { p -> p.lat to p.lng },
+                        lastSearchCategories = f0.categories.ifEmpty { setOf(Category.FOOD) }
+                    )
+                }
+                searchInFlight = false
+            }.onFailure { e ->
+                Log.e(TAG, "onWholeRegionSearch: failed → ${e.message}", e)
+                _ui.update { it.copy(loading = false, error = e.message ?: "검색 실패") }
+                searchInFlight = false
+            }
+        }
+    }
+
+    /**
+     * 특정 위치 주변 검색 (8km 반경)
+     *
+     * @param regionName 지역명 (예: "광주광역시 동구 충장동")
+     * @param centerLat 중심 위도
+     * @param centerLng 중심 경도
+     */
+    fun onRadiusSearch(
+        regionName: String,
+        centerLat: Double,
+        centerLng: Double
+    ) {
+        if (searchInFlight) {
+            Log.w(TAG, "onRadiusSearch: already searching, ignored")
+            return
+        }
+        searchInFlight = true
+
+        val f0 = _ui.value.filter
+        viewModelScope.launch {
+            Log.d(TAG, "onRadiusSearch: $regionName at ($centerLat, $centerLng)")
+            _ui.update { it.copy(loading = true, error = null, showRegionSelectSheet = false) }
+
+            runCatching {
+                val cats = if (f0.categories.isEmpty()) setOf(Category.FOOD) else f0.categories
+                val f = f0.copy(categories = cats, region = regionName)
+
+                repo.recommendWithGpt(
+                    filter = f,
+                    centerLat = centerLat,
+                    centerLng = centerLng,
+                    radiusMeters = 8000,  // 8km 반경
+                    candidateSize = 15
+                )
+            }.onSuccess { res ->
+                Log.d(TAG, "onRadiusSearch: success, ${res.places.size} places")
+                _ui.update {
+                    it.copy(
+                        loading = false,
+                        lastResult = res,
+                        lastSearchCenter = centerLat to centerLng,
+                        lastSearchCategories = f0.categories.ifEmpty { setOf(Category.FOOD) }
+                    )
+                }
+                searchInFlight = false
+            }.onFailure { e ->
+                Log.e(TAG, "onRadiusSearch: failed → ${e.message}", e)
+                _ui.update { it.copy(loading = false, error = e.message ?: "검색 실패") }
+                searchInFlight = false
+            }
         }
     }
 }

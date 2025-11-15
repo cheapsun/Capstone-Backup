@@ -5,8 +5,6 @@ import com.example.project_2.data.KakaoLocalService
 import com.example.project_2.data.weather.WeatherService
 import com.example.project_2.domain.GptRerankUseCase
 import com.example.project_2.domain.model.*
-import com.example.project_2.domain.SubRegionsData
-import com.example.project_2.domain.SearchType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -356,5 +354,202 @@ class RealTravelRepository(
         Log.d("EXPAND_SEARCH", "Found ${newPlaces.size} places, ${filtered.size} new ones")
 
         filtered
+    }
+
+    // ===== 폴리곤 기반 검색 (WIDE 전략 대체) =====
+
+    /**
+     * 폴리곤 내부에 grid 포인트를 생성하고 각 포인트에서 검색
+     *
+     * @param polygonCoords 폴리곤 좌표 리스트
+     * @param categories 검색 카테고리
+     * @param gridSpacing grid 간격 (도 단위, 약 0.01 = 1km)
+     * @param radiusPerPoint 각 grid 포인트당 검색 반경 (미터)
+     * @param sizePerPoint 각 포인트당 최대 결과 수
+     * @return 폴리곤 내부의 장소 리스트
+     */
+    suspend fun searchWithinPolygon(
+        polygonCoords: List<com.example.project_2.data.LatLng>,
+        categories: Set<Category>,
+        gridSpacing: Double = 0.015, // 약 1.5km
+        radiusPerPoint: Int = 2000,  // 2km 반경
+        sizePerPoint: Int = 10
+    ): List<Place> = withContext(Dispatchers.IO) {
+        Log.d("POLYGON_SEARCH", "searchWithinPolygon: ${polygonCoords.size} coords, spacing=$gridSpacing")
+
+        if (polygonCoords.isEmpty()) {
+            Log.w("POLYGON_SEARCH", "Empty polygon!")
+            return@withContext emptyList()
+        }
+
+        val cats = if (categories.isEmpty()) setOf(Category.FOOD) else categories
+
+        // 1. 폴리곤의 경계 계산 (bounding box)
+        val minLat = polygonCoords.minOf { it.lat }
+        val maxLat = polygonCoords.maxOf { it.lat }
+        val minLng = polygonCoords.minOf { it.lng }
+        val maxLng = polygonCoords.maxOf { it.lng }
+
+        Log.d("POLYGON_SEARCH", "Bounds: lat=[$minLat, $maxLat], lng=[$minLng, $maxLng]")
+
+        // 2. Grid 포인트 생성
+        val gridPoints = mutableListOf<Pair<Double, Double>>()
+        var currentLat = minLat
+        while (currentLat <= maxLat) {
+            var currentLng = minLng
+            while (currentLng <= maxLng) {
+                // 포인트가 폴리곤 내부에 있는지 확인
+                if (isPointInPolygon(currentLat, currentLng, polygonCoords)) {
+                    gridPoints.add(currentLat to currentLng)
+                }
+                currentLng += gridSpacing
+            }
+            currentLat += gridSpacing
+        }
+
+        Log.d("POLYGON_SEARCH", "Generated ${gridPoints.size} grid points")
+
+        if (gridPoints.isEmpty()) {
+            Log.w("POLYGON_SEARCH", "No grid points found inside polygon!")
+            return@withContext emptyList()
+        }
+
+        // 3. 각 grid 포인트에서 병렬 검색
+        val allPlaces = mutableListOf<Place>()
+
+        coroutineScope {
+            val searchJobs = gridPoints.map { (lat, lng) ->
+                async {
+                    try {
+                        val places = KakaoLocalService.searchByCategories(
+                            centerLat = lat,
+                            centerLng = lng,
+                            categories = cats,
+                            radiusMeters = radiusPerPoint,
+                            size = sizePerPoint
+                        )
+                        Log.d("POLYGON_SEARCH", "Grid ($lat, $lng): ${places.size} places")
+                        places
+                    } catch (e: Exception) {
+                        Log.e("POLYGON_SEARCH", "Error at grid ($lat, $lng): ${e.message}")
+                        emptyList()
+                    }
+                }
+            }
+
+            searchJobs.awaitAll().forEach { places ->
+                allPlaces.addAll(places)
+            }
+        }
+
+        // 4. 중복 제거
+        val uniquePlaces = allPlaces.distinctBy { it.id }
+
+        // 5. 폴리곤 외부 장소 필터링
+        val insidePolygon = uniquePlaces.filter { place ->
+            isPointInPolygon(place.lat, place.lng, polygonCoords)
+        }
+
+        Log.d("POLYGON_SEARCH", "Total: ${allPlaces.size}, Unique: ${uniquePlaces.size}, Inside: ${insidePolygon.size}")
+        Log.d("POLYGON_SEARCH", "Sample: ${insidePolygon.take(5).joinToString { it.name }}")
+
+        insidePolygon
+    }
+
+    /**
+     * 폴리곤 검색 + GPT 재랭크
+     *
+     * @param filter 사용자 필터
+     * @param polygonCoords 폴리곤 좌표
+     * @return 재랭크된 추천 결과
+     */
+    suspend fun recommendPolygonWithGpt(
+        filter: FilterState,
+        polygonCoords: List<com.example.project_2.data.LatLng>
+    ): RecommendationResult = withContext(Dispatchers.IO) {
+        val regionName = filter.region.ifBlank { "지역" }
+        Log.d("POLYGON_SEARCH", "recommendPolygonWithGpt: region=$regionName, ${polygonCoords.size} coords")
+
+        // 날씨 조회 (폴리곤 중심으로)
+        val centerLat = polygonCoords.map { it.lat }.average()
+        val centerLng = polygonCoords.map { it.lng }.average()
+        val weather = getWeatherByLatLng(centerLat, centerLng).also {
+            Log.d("POLYGON_SEARCH", "weather=${it?.condition} ${it?.tempC}C")
+        }
+
+        val cats = if (filter.categories.isEmpty()) setOf(Category.FOOD) else filter.categories
+
+        // 폴리곤 내 검색
+        val candidates = searchWithinPolygon(
+            polygonCoords = polygonCoords,
+            categories = cats
+        )
+
+        Log.d("POLYGON_SEARCH", "Polygon search returned ${candidates.size} candidates")
+
+        if (candidates.isEmpty()) {
+            Log.w("POLYGON_SEARCH", "No candidates found in polygon!")
+            return@withContext RecommendationResult(emptyList(), weather)
+        }
+
+        // GPT 재랭크
+        val out = runCatching {
+            reranker.rerankWithReasons(filter, weather, candidates)
+        }.onFailure {
+            Log.e("POLYGON_SEARCH", "GPT rerank error: ${it.message}", it)
+        }.getOrElse {
+            GptRerankUseCase.RerankOutput(candidates, emptyMap())
+        }
+
+        // 리밸런싱
+        val (top, ordered) = rebalanceByCategory(
+            candidates = out.places,
+            selectedCats = cats,
+            minPerCat = 4,
+            perCatTop = 1,
+            totalCap = null
+        )
+
+        RecommendationResult(
+            places     = ordered,
+            weather    = weather,
+            gptReasons = out.reasons,
+            topPicks   = top,
+            aiTopIds   = out.aiTopIds
+        )
+    }
+
+    /**
+     * Point-in-Polygon 알고리즘 (Ray Casting)
+     *
+     * @param lat 확인할 점의 위도
+     * @param lng 확인할 점의 경도
+     * @param polygon 폴리곤 좌표 리스트
+     * @return 점이 폴리곤 내부에 있으면 true
+     */
+    private fun isPointInPolygon(
+        lat: Double,
+        lng: Double,
+        polygon: List<com.example.project_2.data.LatLng>
+    ): Boolean {
+        if (polygon.size < 3) return false
+
+        var inside = false
+        var j = polygon.size - 1
+
+        for (i in polygon.indices) {
+            val xi = polygon[i].lng
+            val yi = polygon[i].lat
+            val xj = polygon[j].lng
+            val yj = polygon[j].lat
+
+            val intersect = ((yi > lat) != (yj > lat)) &&
+                    (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)
+
+            if (intersect) inside = !inside
+            j = i
+        }
+
+        return inside
     }
 }

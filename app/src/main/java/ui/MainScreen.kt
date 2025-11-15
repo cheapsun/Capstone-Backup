@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.project_2.domain.model.*
+import com.example.project_2.ui.region.RegionSelectBottomSheet
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -86,7 +88,8 @@ fun MainScreen(
                     showAutoComplete = ui.showAutoComplete,
                     autoCompleteSuggestions = ui.autoCompleteSuggestions,
                     onSelectSuggestion = vm::selectAutoComplete,
-                    onDismissAutoComplete = vm::hideAutoComplete
+                    onDismissAutoComplete = vm::hideAutoComplete,
+                    onMapIconClick = vm::showRegionSelectSheet
                 )
             }
 
@@ -204,6 +207,20 @@ fun MainScreen(
 
             item { Spacer(Modifier.height(8.dp)) }
         }
+
+        // 🔹 지역 선택 BottomSheet
+        if (ui.showRegionSelectSheet) {
+            RegionSelectBottomSheet(
+                regionQuery = ui.filter.region.ifBlank { "서울" },
+                onDismiss = vm::hideRegionSelectSheet,
+                onWholeRegionSearch = { regionName, polygon ->
+                    vm.onWholeRegionSearch(regionName, polygon)
+                },
+                onRadiusSearch = { regionName, centerLat, centerLng ->
+                    vm.onRadiusSearch(regionName, centerLat, centerLng)
+                }
+            )
+        }
     }
 }
 
@@ -217,7 +234,8 @@ private fun SearchCard(
     showAutoComplete: Boolean = false,
     autoCompleteSuggestions: List<String> = emptyList(),
     onSelectSuggestion: (String) -> Unit = {},
-    onDismissAutoComplete: () -> Unit = {}
+    onDismissAutoComplete: () -> Unit = {},
+    onMapIconClick: () -> Unit = {}
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -231,6 +249,11 @@ private fun SearchCard(
                 onValueChange = onValueChange,
                 placeholder = { Text("도시 또는 지역 검색…") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    IconButton(onClick = onMapIconClick) {
+                        Icon(Icons.Default.Place, contentDescription = "지도에서 선택", tint = MaterialTheme.colorScheme.primary)
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
