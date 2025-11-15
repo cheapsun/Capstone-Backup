@@ -27,6 +27,10 @@ import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
 import com.kakao.vectormap.label.LabelStyles
 import com.kakao.vectormap.label.LabelTextStyle
+import com.kakao.vectormap.shape.Polygon
+import com.kakao.vectormap.shape.PolygonOptions
+import com.kakao.vectormap.shape.PolygonStyles
+import com.kakao.vectormap.shape.PolygonStyle
 import com.kakao.vectormap.route.RouteLineOptions
 import com.kakao.vectormap.route.RouteLineSegment
 import com.kakao.vectormap.route.RouteLineStyle
@@ -145,15 +149,20 @@ fun RegionSelectBottomSheet(
             Log.e("RegionSelect", "❌ LaunchedEffect: labelManager is null")
             return@LaunchedEffect
         }
+        val shapeManager = map.shapeManager ?: run {
+            Log.e("RegionSelect", "❌ LaunchedEffect: shapeManager is null")
+            return@LaunchedEffect
+        }
 
         try {
             Log.d("RegionSelect", "🎨 ===== 경계선/라벨 그리기 시작 =====")
             Log.d("RegionSelect", "📊 adminPolygons.size = ${adminPolygons.size}")
             Log.d("RegionSelect", "📊 dongLabels.size = ${dongLabels.size}")
 
-            // 기존 경계선 및 라벨 제거
+            // 기존 경계선, 폴리곤 및 라벨 제거
             routeLineManager.layer?.removeAll()
             labelManager.layer?.removeAll()
+            shapeManager.layer?.removeAll()  // ✅ 폴리곤 레이어도 제거
             Log.d("RegionSelect", "✅ 기존 레이어 제거 완료")
 
             // 폴리곤 그리기 (경계선만 표시 - RouteLine 사용)
@@ -175,13 +184,31 @@ fun RegionSelectBottomSheet(
                 Log.d("RegionSelect", "🔹 폴리곤 $idx KakaoCoords 생성: ${kakaoCoords.size}개 (첫=${kakaoCoords.firstOrNull()}, 끝=${kakaoCoords.lastOrNull()})")
 
                 try {
-                    // ✅ RouteLine을 사용하여 경계선 그리기 (훨씬 굵고 밝게)
+                    // ✅ 1단계: 반투명 채우기 (Polygon)
+                    val polygonOptions = PolygonOptions.from(kakaoCoords)
+                        .setStyles(
+                            PolygonStyles.from(
+                                PolygonStyle.from(
+                                    Color.argb(40, 66, 133, 244)  // 반투명 파란색 채우기 (Material Blue)
+                                )
+                            )
+                        )
+
+                    val filledPolygon = shapeManager.layer?.addPolygon(polygonOptions)
+                    if (filledPolygon != null) {
+                        filledPolygon.show()
+                        Log.d("RegionSelect", "✅ 폴리곤 $idx 채우기 성공: ${polygon.name}")
+                    } else {
+                        Log.w("RegionSelect", "⚠️ 폴리곤 $idx 채우기 실패: ${polygon.name}")
+                    }
+
+                    // ✅ 2단계: 경계선 그리기 (RouteLine) - 부드러운 파란색
                     val segment = RouteLineSegment.from(kakaoCoords)
                         .setStyles(
                             RouteLineStyles.from(
                                 RouteLineStyle.from(
-                                    12f,  // 선 두께 (매우 굵게: 6f → 12f)
-                                    Color.argb(255, 255, 0, 0)  // 빨간색 (고대비, 불투명)
+                                    4f,  // 선 두께 (적당한 굵기)
+                                    Color.argb(180, 66, 133, 244)  // 부드러운 파란색 (눈에 편안함)
                                 )
                             )
                         )
