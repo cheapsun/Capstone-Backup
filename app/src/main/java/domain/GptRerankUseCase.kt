@@ -103,6 +103,11 @@ $chainPenaltyRule
 [후보 목록]
 $candidatesText
 
+**[⚠️ 중요: ID 사용 규칙]**
+- 출력 JSON의 "id" 필드에는 **반드시 위 후보 목록의 숫자 id 값만** 사용하세요.
+- 절대 name(장소명)을 id로 사용하지 마세요.
+- 예시: {"id":"27298511"} ✅ 정답 / {"id":"씨엘드 프랑스"} ❌ 오답
+
 출력 형식:
 {"ordered":[{"id":"<place_id>","score":95,"reason":"..."}]}
 """.trimIndent()
@@ -188,13 +193,24 @@ $candidatesText
         Log.d(TAG, "parsed ids: " + ranked.joinToString { it.id })
 
         val byRealId = capped.associateBy { it.id }
+        val byName = capped.associateBy { it.name }  // ✅ 이름으로도 매칭 가능하도록
         val used = HashSet<String>()
 
         fun idToIndex(id: String): Int? =
             if (id.startsWith("p")) id.drop(1).toIntOrNull() else null
 
         fun resolveRealId(gptId: String): String? {
+            // 1차: 숫자 ID로 매칭
             if (byRealId.containsKey(gptId)) return gptId
+
+            // 2차: 이름으로 매칭 (GPT가 실수로 이름을 사용한 경우)
+            val byNameMatch = byName[gptId]?.id
+            if (byNameMatch != null) {
+                Log.w(TAG, "⚠️ GPT가 ID 대신 이름 사용: '$gptId' → ID로 매칭 성공: $byNameMatch")
+                return byNameMatch
+            }
+
+            // 3차: pN 형식 백업 매칭
             val idx = idToIndex(gptId) ?: return null
             return capped.getOrNull(idx)?.id
         }
