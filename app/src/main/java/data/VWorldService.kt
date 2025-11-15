@@ -179,6 +179,10 @@ object VWorldService {
         val key = apiKey ?: return emptyList()
 
         return try {
+            Log.d(TAG, "🏷️ getDongLabels 시작: regionName='$regionName'")
+
+            // ✅ 와일드카드 추가: "부산광역시 연제구" → "*부산광역시 연제구*"
+            // 이렇게 하면 "부산광역시 연제구 XXX동" 형식의 모든 동을 찾을 수 있음
             val response = svc.getFeature(
                 service = "WFS",
                 request = "GetFeature",
@@ -186,11 +190,11 @@ object VWorldService {
                 key = key,
                 domain = DOMAIN,
                 output = "application/json",
-                attrFilter = "full_nm:like:$regionName",
+                attrFilter = "full_nm:like:*$regionName*",  // ✅ 와일드카드 추가
                 srsName = "EPSG:4326"  // WGS84 좌표계 요청
             )
 
-            Log.d(TAG, "getDongLabels($regionName): ${response.features.size} features")
+            Log.d(TAG, "🏷️ getDongLabels 응답: ${response.features.size}개 features")
 
             response.features.map { feature ->
                 val coords = extractCoordinates(feature.geometry)
@@ -201,9 +205,11 @@ object VWorldService {
                     centerLat = center.first,
                     centerLng = center.second
                 )
+            }.also {
+                Log.d(TAG, "✅ getDongLabels 완료: ${it.size}개 라벨 생성")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "getDongLabels failed: ${e.message}", e)
+            Log.e(TAG, "❌ getDongLabels 실패: ${e.message}", e)
             emptyList()
         }
     }
