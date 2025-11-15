@@ -94,7 +94,12 @@ object VWorldService {
             val items = resp.response?.result?.items ?: emptyList()
             Log.d(TAG, "searchDistrict: Found ${items.size} items")
 
-            val results = items.map { item ->
+            // 각 항목의 category 로깅
+            items.take(5).forEach { item ->
+                Log.d(TAG, "  - title=${item.title}, category=${item.category}, address=${item.address}")
+            }
+
+            val allResults = items.map { item ->
                 DistrictResult(
                     title = item.title ?: "",
                     category = item.category ?: "",
@@ -102,7 +107,15 @@ object VWorldService {
                 )
             }.filter { it.title.isNotBlank() }
 
-            Log.d(TAG, "searchDistrict: Returning ${results.size} results")
+            Log.d(TAG, "searchDistrict: ${allResults.size} results after blank filter")
+
+            // 시도(L1) 또는 시군구(L2)만 필터링
+            val results = allResults.filter {
+                val cat = it.category
+                cat.startsWith("L1") || cat.startsWith("L2") || cat == "L1" || cat == "L2"
+            }
+
+            Log.d(TAG, "searchDistrict: Returning ${results.size} results after L1/L2 filtering")
             results
         } catch (e: Exception) {
             Log.e(TAG, "searchDistrict: Error - ${e.message}", e)
