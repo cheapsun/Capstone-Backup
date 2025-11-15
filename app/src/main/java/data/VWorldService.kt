@@ -78,10 +78,13 @@ object VWorldService {
                 type = "DISTRICT",
                 query = query,
                 size = size,
-                crs = "EPSG:4326"
+                crs = "EPSG:4326",
+                format = "json",
+                errorFormat = "json"
             )
 
             Log.d(TAG, "searchDistrict: Response received - response=${resp.response != null}")
+            Log.d(TAG, "searchDistrict: Status = ${resp.response?.status}")
             Log.d(TAG, "searchDistrict: Result = ${resp.response?.result}")
 
             // 응답에서 결과 추출
@@ -123,7 +126,9 @@ object VWorldService {
             @Query("type") type: String,
             @Query("query") query: String,
             @Query("size") size: Int,
-            @Query("crs") crs: String
+            @Query("crs") crs: String,
+            @Query("format") format: String,
+            @Query("errorformat") errorFormat: String
         ): VWorldResponse
     }
 
@@ -134,6 +139,7 @@ object VWorldService {
     )
 
     private data class VWorldResponseBody(
+        val status: String? = null,
         val result: VWorldResult? = null
     )
 
