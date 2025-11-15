@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -322,6 +323,18 @@ fun RegionSelectBottomSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
+                            .pointerInput(Unit) {
+                                // ✅ 지도 영역의 모든 터치 이벤트를 소비하여
+                                // BottomSheet로 전파되지 않도록 함
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        awaitPointerEvent()
+                                        // 이벤트를 소비하지 않고 그냥 통과시킴
+                                        // 이렇게 하면 AndroidView(MapView)가 터치를 받지만
+                                        // BottomSheet는 받지 않음
+                                    }
+                                }
+                            }
                     ) {
                         AndroidView(
                             factory = { ctx ->
