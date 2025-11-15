@@ -29,8 +29,9 @@ import com.kakao.vectormap.label.LabelStyles
 import com.kakao.vectormap.label.LabelTextStyle
 import com.kakao.vectormap.shape.Polygon
 import com.kakao.vectormap.shape.PolygonOptions
-import com.kakao.vectormap.shape.PolygonStyles
 import com.kakao.vectormap.shape.PolygonStyle
+import com.kakao.vectormap.shape.MapPoints
+import com.kakao.vectormap.shape.DotPoints
 import com.kakao.vectormap.route.RouteLineOptions
 import com.kakao.vectormap.route.RouteLineSegment
 import com.kakao.vectormap.route.RouteLineStyle
@@ -185,14 +186,12 @@ fun RegionSelectBottomSheet(
 
                 try {
                     // ✅ 1단계: 반투명 채우기 (Polygon)
-                    val polygonOptions = PolygonOptions.from(kakaoCoords)
-                        .setStyles(
-                            PolygonStyles.from(
-                                PolygonStyle.from(
-                                    Color.argb(40, 66, 133, 244)  // 반투명 파란색 채우기 (Material Blue)
-                                )
-                            )
-                        )
+                    val mapPoints = DotPoints.fromLatLngList(kakaoCoords)
+                    val fillStyle = PolygonStyle.from(
+                        Color.argb(40, 66, 133, 244)  // 반투명 파란색 채우기 (Material Blue)
+                    )
+
+                    val polygonOptions = PolygonOptions.from(mapPoints, fillStyle)
 
                     val filledPolygon = shapeManager.layer?.addPolygon(polygonOptions)
                     if (filledPolygon != null) {
