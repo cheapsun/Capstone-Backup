@@ -1,5 +1,6 @@
 package com.example.project_2.data
 
+import android.util.Log
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -16,13 +17,15 @@ import java.util.concurrent.TimeUnit
  */
 object VWorldService {
 
-    private const val BASE_URL = "http://api.vworld.kr/"
+    private const val TAG = "VWorldService"
+    private const val BASE_URL = "https://api.vworld.kr/"  // HTTPS 사용
     private var api: VWorldApi? = null
     private var apiKey: String = ""
 
     /** 앱 시작 시 한 번만 호출 */
     fun init(vworldApiKey: String) {
         apiKey = vworldApiKey
+        Log.d(TAG, "init: API key length = ${vworldApiKey.length}")
 
         val client = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -37,6 +40,7 @@ object VWorldService {
             .build()
 
         api = retrofit.create(VWorldApi::class.java)
+        Log.d(TAG, "init: VWorld API initialized")
     }
 
     /**
@@ -47,11 +51,25 @@ object VWorldService {
         query: String,
         size: Int = 10
     ): List<DistrictResult> {
-        if (query.isBlank()) return emptyList()
-        val svc = api ?: return emptyList()
-        if (apiKey.isBlank()) return emptyList()
+        if (query.isBlank()) {
+            Log.d(TAG, "searchDistrict: query is blank")
+            return emptyList()
+        }
+
+        val svc = api
+        if (svc == null) {
+            Log.e(TAG, "searchDistrict: API not initialized")
+            return emptyList()
+        }
+
+        if (apiKey.isBlank()) {
+            Log.e(TAG, "searchDistrict: API key is blank")
+            return emptyList()
+        }
 
         return try {
+            Log.d(TAG, "searchDistrict: Searching for query='$query', size=$size")
+
             val resp = svc.search(
                 key = apiKey,
                 service = "search",
@@ -63,16 +81,25 @@ object VWorldService {
                 crs = "EPSG:4326"
             )
 
+            Log.d(TAG, "searchDistrict: Response received - response=${resp.response != null}")
+            Log.d(TAG, "searchDistrict: Result = ${resp.response?.result}")
+
             // 응답에서 결과 추출
             val items = resp.response?.result?.items ?: emptyList()
-            items.map { item ->
+            Log.d(TAG, "searchDistrict: Found ${items.size} items")
+
+            val results = items.map { item ->
                 DistrictResult(
                     title = item.title ?: "",
                     category = item.category ?: "",
                     address = item.address ?: ""
                 )
             }.filter { it.title.isNotBlank() }
+
+            Log.d(TAG, "searchDistrict: Returning ${results.size} results")
+            results
         } catch (e: Exception) {
+            Log.e(TAG, "searchDistrict: Error - ${e.message}", e)
             emptyList()
         }
     }
