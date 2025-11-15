@@ -124,19 +124,33 @@ fun RegionSelectBottomSheet(
 
     // 🔹 지도에 경계선 및 라벨 표시
     LaunchedEffect(kakaoMap, adminPolygons, dongLabels) {
-        val map = kakaoMap ?: return@LaunchedEffect
-        val routeLineManager = map.routeLineManager ?: return@LaunchedEffect
-        val labelManager = map.labelManager ?: return@LaunchedEffect
+        val map = kakaoMap ?: run {
+            Log.e("RegionSelect", "❌ LaunchedEffect: kakaoMap is null")
+            return@LaunchedEffect
+        }
+        val routeLineManager = map.routeLineManager ?: run {
+            Log.e("RegionSelect", "❌ LaunchedEffect: routeLineManager is null")
+            return@LaunchedEffect
+        }
+        val labelManager = map.labelManager ?: run {
+            Log.e("RegionSelect", "❌ LaunchedEffect: labelManager is null")
+            return@LaunchedEffect
+        }
 
         try {
+            Log.d("RegionSelect", "🎨 ===== 경계선/라벨 그리기 시작 =====")
+            Log.d("RegionSelect", "📊 adminPolygons.size = ${adminPolygons.size}")
+            Log.d("RegionSelect", "📊 dongLabels.size = ${dongLabels.size}")
+
             // 기존 경계선 및 라벨 제거
             routeLineManager.layer?.removeAll()
             labelManager.layer?.removeAll()
-
-            Log.d("RegionSelect", "🎨 경계선/라벨 그리기 시작 (${adminPolygons.size}개 폴리곤)")
+            Log.d("RegionSelect", "✅ 기존 레이어 제거 완료")
 
             // 폴리곤 그리기 (경계선만 표시 - RouteLine 사용)
             adminPolygons.forEachIndexed { idx, polygon ->
+                Log.d("RegionSelect", "🔹 폴리곤 $idx 처리 중: name=${polygon.name}, coords=${polygon.coordinates.size}")
+
                 if (polygon.coordinates.isEmpty()) {
                     Log.w("RegionSelect", "⚠️ 폴리곤 $idx 좌표 없음: ${polygon.name}")
                     return@forEachIndexed
@@ -148,6 +162,8 @@ fun RegionSelectBottomSheet(
                 }.toMutableList().apply {
                     if (isNotEmpty()) add(first())  // 시작점 = 끝점으로 닫힌 경로
                 }
+
+                Log.d("RegionSelect", "🔹 폴리곤 $idx KakaoCoords 생성: ${kakaoCoords.size}개 (첫=${kakaoCoords.firstOrNull()}, 끝=${kakaoCoords.lastOrNull()})")
 
                 try {
                     // ✅ RouteLine을 사용하여 경계선 그리기 (훨씬 굵고 밝게)
@@ -161,33 +177,52 @@ fun RegionSelectBottomSheet(
                             )
                         )
 
+                    Log.d("RegionSelect", "🔹 폴리곤 $idx RouteLineSegment 생성 완료")
+
                     val options = RouteLineOptions.from(segment)
                     val routeLine = routeLineManager.layer?.addRouteLine(options)
-                    routeLine?.show()
 
-                    Log.d("RegionSelect", "✅ 경계선 $idx 그림: ${polygon.name}, ${kakaoCoords.size}개 좌표, RouteLine=${routeLine != null}")
+                    Log.d("RegionSelect", "🔹 폴리곤 $idx RouteLine 추가: routeLine=${routeLine != null}, layer=${routeLineManager.layer != null}")
+
+                    if (routeLine != null) {
+                        routeLine.show()
+                        Log.d("RegionSelect", "✅ 폴리곤 $idx 경계선 표시 성공: ${polygon.name}")
+                    } else {
+                        Log.e("RegionSelect", "❌ 폴리곤 $idx RouteLine이 null: ${polygon.name}")
+                    }
                 } catch (e: Exception) {
-                    Log.e("RegionSelect", "❌ 경계선 그리기 실패: ${e.message}", e)
+                    Log.e("RegionSelect", "❌ 폴리곤 $idx 경계선 그리기 실패: ${e.javaClass.simpleName} - ${e.message}", e)
+                    e.printStackTrace()
                 }
             }
 
+            Log.d("RegionSelect", "🎨 경계선 그리기 완료 (${adminPolygons.size}개 처리)")
+
             // 동 라벨 그리기
+            Log.d("RegionSelect", "🏷️ 동 라벨 그리기 시작: ${dongLabels.size}개")
             val textStyle = LabelStyles.from(
                 LabelStyle.from(LabelTextStyle.from(24, Color.BLACK, 2, Color.WHITE))
             )
 
-            dongLabels.forEach { label ->
-                val options = LabelOptions.from(LatLng.from(label.centerLat, label.centerLng))
-                    .setStyles(textStyle)
-                    .setTexts(label.name)
+            dongLabels.forEachIndexed { idx, label ->
+                try {
+                    val options = LabelOptions.from(LatLng.from(label.centerLat, label.centerLng))
+                        .setStyles(textStyle)
+                        .setTexts(label.name)
 
-                labelManager.layer?.addLabel(options)
+                    val addedLabel = labelManager.layer?.addLabel(options)
+                    Log.d("RegionSelect", "🏷️ 라벨 $idx 추가: ${label.name} at (${label.centerLat}, ${label.centerLng}), success=${addedLabel != null}")
+                } catch (e: Exception) {
+                    Log.e("RegionSelect", "❌ 라벨 $idx 추가 실패: ${e.message}", e)
+                }
             }
 
             Log.d("RegionSelect", "✅ 라벨 ${dongLabels.size}개 표시 완료")
+            Log.d("RegionSelect", "🎨 ===== 경계선/라벨 그리기 종료 =====")
 
         } catch (e: Exception) {
-            Log.e("RegionSelect", "❌ 폴리곤/라벨 그리기 실패: ${e.message}", e)
+            Log.e("RegionSelect", "❌❌❌ 폴리곤/라벨 그리기 전체 실패: ${e.javaClass.simpleName} - ${e.message}", e)
+            e.printStackTrace()
         }
     }
 
@@ -204,7 +239,9 @@ fun RegionSelectBottomSheet(
         ) {
             // 헤더: 지역 이름
             Text(
-                text = currentRegionName,
+                text = currentRegionName.also {
+                    Log.d("RegionSelect", "📍 UI에 표시되는 지역명: '$it'")
+                },
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -279,35 +316,58 @@ fun RegionSelectBottomSheet(
 
                                                 // 🔹 지도 클릭 시 역지오코딩으로 지역명 업데이트 및 경계선 다시 로드
                                                 map.setOnMapClickListener { _, latLng, _, _ ->
+                                                    Log.d("RegionSelect", "🖱️ ===== 지도 클릭 이벤트 시작 =====")
+                                                    Log.d("RegionSelect", "🖱️ 클릭 좌표: (${latLng.latitude}, ${latLng.longitude})")
+
                                                     scope.launch {
                                                         try {
+                                                            Log.d("RegionSelect", "🖱️ 역지오코딩 시작...")
                                                             val regionInfo = KakaoLocalService.coord2regioncode(
                                                                 latLng.latitude,
                                                                 latLng.longitude
                                                             )
+
+                                                            Log.d("RegionSelect", "🖱️ 역지오코딩 결과: $regionInfo")
+
                                                             if (regionInfo != null) {
+                                                                Log.d("RegionSelect", "🖱️ region1=${regionInfo.region1}, region2=${regionInfo.region2}, region3=${regionInfo.region3}")
+                                                                Log.d("RegionSelect", "🖱️ displayName=${regionInfo.displayName}, cityDistrictName=${regionInfo.cityDistrictName}")
+
                                                                 centerLat = latLng.latitude
                                                                 centerLng = latLng.longitude
 
                                                                 // ✅ 1. 먼저 읍/면/동 레벨 경계 시도 (region3가 있으면)
                                                                 val dongName = regionInfo.region3
+                                                                Log.d("RegionSelect", "🖱️ 읍/면/동 이름: '$dongName' (비어있음=${dongName.isBlank()})")
+
                                                                 val emdongPolygon = if (dongName.isNotBlank()) {
+                                                                    Log.d("RegionSelect", "🖱️ VWorld API 호출: getEmdongBoundaryByName(dongName=$dongName, region=${regionInfo.cityDistrictName})")
                                                                     VWorldService.getEmdongBoundaryByName(
                                                                         dongName = dongName,
                                                                         region = regionInfo.cityDistrictName
                                                                     )
-                                                                } else null
+                                                                } else {
+                                                                    Log.d("RegionSelect", "🖱️ 읍/면/동 이름이 비어있어서 스킵")
+                                                                    null
+                                                                }
+
+                                                                Log.d("RegionSelect", "🖱️ 읍/면/동 폴리곤 결과: ${emdongPolygon != null}, 좌표수=${emdongPolygon?.coordinates?.size ?: 0}")
 
                                                                 if (emdongPolygon != null && emdongPolygon.coordinates.isNotEmpty()) {
                                                                     // ✅ 읍/면/동 선택 성공
                                                                     currentRegionName = "${regionInfo.displayName} ${dongName}"
+                                                                    Log.d("RegionSelect", "🖱️ currentRegionName 업데이트 (읍/면/동): '$currentRegionName'")
+
                                                                     adminPolygons = listOf(emdongPolygon)
                                                                     dongLabels = emptyList() // 읍/면/동 선택 시 라벨 숨김
 
-                                                                    Log.d("RegionSelect", "✅ 읍/면/동 선택: $currentRegionName")
+                                                                    Log.d("RegionSelect", "✅ 읍/면/동 선택 완료: $currentRegionName (폴리곤 ${emdongPolygon.coordinates.size}개 좌표)")
                                                                 } else {
                                                                     // ✅ 읍/면/동 없으면 시/군/구 레벨로 폴백
+                                                                    Log.d("RegionSelect", "🖱️ 읍/면/동 폴리곤 없음, 시/군/구로 폴백")
                                                                     currentRegionName = regionInfo.displayName
+                                                                    Log.d("RegionSelect", "🖱️ currentRegionName 업데이트 (시/군/구): '$currentRegionName'")
+
                                                                     val region1 = regionInfo.region1
                                                                     val region2 = regionInfo.region2
                                                                     val vworldQuery = if (region2.isNotBlank()) {
@@ -316,21 +376,31 @@ fun RegionSelectBottomSheet(
                                                                         region1
                                                                     }
 
+                                                                    Log.d("RegionSelect", "🖱️ VWorld API 호출: getAdminBoundary('$vworldQuery')")
                                                                     adminPolygons = VWorldService.getAdminBoundary(vworldQuery)
-                                                                    dongLabels = VWorldService.getDongLabels(vworldQuery)
+                                                                    Log.d("RegionSelect", "🖱️ 시/군/구 폴리곤: ${adminPolygons.size}개")
 
-                                                                    Log.d("RegionSelect", "✅ 시/군/구 선택: $currentRegionName")
+                                                                    Log.d("RegionSelect", "🖱️ VWorld API 호출: getDongLabels('$vworldQuery')")
+                                                                    dongLabels = VWorldService.getDongLabels(vworldQuery)
+                                                                    Log.d("RegionSelect", "🖱️ 동 라벨: ${dongLabels.size}개")
+
+                                                                    Log.d("RegionSelect", "✅ 시/군/구 선택 완료: $currentRegionName")
                                                                 }
 
-                                                                Log.d("RegionSelect", "📍 지도 클릭: $currentRegionName (${adminPolygons.size}개 폴리곤)")
+                                                                Log.d("RegionSelect", "📍 지도 클릭 처리 완료: $currentRegionName (${adminPolygons.size}개 폴리곤)")
 
                                                                 // ✅ 지도 카메라 이동 (더 확대)
+                                                                Log.d("RegionSelect", "🖱️ 카메라 이동: zoom=15")
                                                                 map.moveCamera(
                                                                     CameraUpdateFactory.newCenterPosition(latLng, 15)
                                                                 )
+                                                                Log.d("RegionSelect", "🖱️ ===== 지도 클릭 이벤트 완료 =====")
+                                                            } else {
+                                                                Log.e("RegionSelect", "❌ 역지오코딩 결과가 null")
                                                             }
                                                         } catch (e: Exception) {
-                                                            Log.e("RegionSelect", "❌ 지도 클릭 처리 실패: ${e.message}", e)
+                                                            Log.e("RegionSelect", "❌❌❌ 지도 클릭 처리 실패: ${e.javaClass.simpleName} - ${e.message}", e)
+                                                            e.printStackTrace()
                                                         }
                                                     }
                                                 }

@@ -63,19 +63,36 @@ object KakaoLocalService {
 
     /** 좌표를 행정구역 정보로 변환 (역지오코딩). 실패 시 null */
     suspend fun coord2regioncode(lat: Double, lng: Double): RegionInfo? {
-        val svc = api ?: return null
+        Log.d(TAG, "🔍 coord2regioncode 시작: lat=$lat, lng=$lng")
+
+        val svc = api ?: run {
+            Log.e(TAG, "❌ coord2regioncode: api is null")
+            return null
+        }
+
         val resp = svc.coord2regioncode(x = lng, y = lat)
+        Log.d(TAG, "🔍 Kakao API 응답: ${resp.documents.size}개 documents")
+
         val doc = resp.documents.firstOrNull { it.region_type == "B" } // B = 법정동
             ?: resp.documents.firstOrNull() // fallback to any region
-            ?: return null
+            ?: run {
+                Log.e(TAG, "❌ coord2regioncode: no documents found")
+                return null
+            }
+
+        Log.d(TAG, "🔍 선택된 document: region_type=${doc.region_type}")
 
         val region1 = doc.region_1depth_name
         val region2 = doc.region_2depth_name
         val region3 = doc.region_3depth_name
 
+        Log.d(TAG, "🔍 행정구역 원시 데이터: region1='$region1', region2='$region2', region3='$region3'")
+
         // ✅ 가장 간결한 이름: region2만 사용 (예: "익산시", "강남구")
         // 단, region2가 비어있으면 region1 사용
         val displayName = if (region2.isNotBlank()) region2 else region1
+
+        Log.d(TAG, "✅ displayName 계산: '$displayName' (region2 사용=${region2.isNotBlank()})")
 
         return RegionInfo(
             region1 = region1,
@@ -84,7 +101,9 @@ object KakaoLocalService {
             fullName = "$region1 $region2 $region3".trim(),
             cityDistrictName = "$region1 $region2".trim(),  // 시/도 + 시/군/구
             displayName = displayName  // 가장 간결한 이름 (시/군/구만)
-        )
+        ).also {
+            Log.d(TAG, "✅ RegionInfo 생성: $it")
+        }
     }
 
     /**

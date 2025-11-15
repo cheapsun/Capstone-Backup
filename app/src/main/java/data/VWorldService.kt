@@ -88,11 +88,22 @@ object VWorldService {
      * @return 해당 읍/면/동 폴리곤 (null이면 찾지 못함)
      */
     suspend fun getEmdongBoundaryByName(dongName: String, region: String): AdminPolygon? {
-        val svc = api ?: return null
-        val key = apiKey ?: return null
+        Log.d(TAG, "🔍 getEmdongBoundaryByName 시작: dongName='$dongName', region='$region'")
+
+        val svc = api ?: run {
+            Log.e(TAG, "❌ getEmdongBoundaryByName: api is null")
+            return null
+        }
+        val key = apiKey ?: run {
+            Log.e(TAG, "❌ getEmdongBoundaryByName: apiKey is null")
+            return null
+        }
 
         return try {
             // 읍/면/동 이름으로 검색 (상위 지역명 포함하여 검색 범위 좁히기)
+            val fullQuery = "$region $dongName"
+            Log.d(TAG, "🔍 VWorld API 호출 (full_nm): '$fullQuery'")
+
             val response = svc.getFeature(
                 service = "WFS",
                 request = "GetFeature",
@@ -100,13 +111,15 @@ object VWorldService {
                 key = key,
                 domain = DOMAIN,
                 output = "application/json",
-                attrFilter = "full_nm:like:$region $dongName"  // "전라북도 익산시 영등동"
+                attrFilter = "full_nm:like:$fullQuery"
             )
 
-            Log.d(TAG, "getEmdongBoundaryByName($dongName, $region): ${response.features.size} features")
+            Log.d(TAG, "🔍 VWorld API 응답 (full_nm): ${response.features.size}개 features")
 
             if (response.features.isEmpty()) {
                 // 전체 이름 검색 실패 시 읍/면/동 이름만으로 재시도
+                Log.d(TAG, "🔍 전체 이름 검색 실패, 읍/면/동 이름만으로 재시도: '$dongName'")
+
                 val response2 = svc.getFeature(
                     service = "WFS",
                     request = "GetFeature",
@@ -117,12 +130,18 @@ object VWorldService {
                     attrFilter = "emd_kor_nm:like:$dongName"
                 )
 
-                Log.d(TAG, "getEmdongBoundaryByName fallback: ${response2.features.size} features")
+                Log.d(TAG, "🔍 VWorld API 응답 (emd_kor_nm): ${response2.features.size}개 features")
 
-                if (response2.features.isEmpty()) return null
+                if (response2.features.isEmpty()) {
+                    Log.w(TAG, "⚠️ 읍/면/동 경계를 찾을 수 없음: '$dongName'")
+                    return null
+                }
 
                 val feature = response2.features.first()
+                Log.d(TAG, "🔍 feature.properties: ${feature.properties}")
+
                 val coords = extractCoordinates(feature.geometry)
+                Log.d(TAG, "✅ 읍/면/동 경계 추출 성공 (fallback): ${coords.size}개 좌표")
 
                 return AdminPolygon(
                     name = feature.properties.emd_kor_nm ?: dongName,
@@ -131,14 +150,18 @@ object VWorldService {
             }
 
             val feature = response.features.first()
+            Log.d(TAG, "🔍 feature.properties: ${feature.properties}")
+
             val coords = extractCoordinates(feature.geometry)
+            Log.d(TAG, "✅ 읍/면/동 경계 추출 성공: ${coords.size}개 좌표")
 
             AdminPolygon(
                 name = feature.properties.emd_kor_nm ?: dongName,
                 coordinates = coords
             )
         } catch (e: Exception) {
-            Log.e(TAG, "getEmdongBoundaryByName failed: ${e.message}", e)
+            Log.e(TAG, "❌❌❌ getEmdongBoundaryByName 실패: ${e.javaClass.simpleName} - ${e.message}", e)
+            e.printStackTrace()
             null
         }
     }
