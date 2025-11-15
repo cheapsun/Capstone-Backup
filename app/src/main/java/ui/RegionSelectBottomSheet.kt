@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
@@ -72,6 +73,11 @@ fun RegionSelectBottomSheet(
 
     var adminPolygons by remember { mutableStateOf<List<AdminPolygon>>(emptyList()) }
     var dongLabels by remember { mutableStateOf<List<DongLabel>>(emptyList()) }
+
+    // 🔹 이전 상태 저장 (실수로 클릭한 경우 되돌리기용)
+    var previousRegionName by remember { mutableStateOf<String?>(null) }
+    var previousAdminPolygons by remember { mutableStateOf<List<AdminPolygon>>(emptyList()) }
+    var previousDongLabels by remember { mutableStateOf<List<DongLabel>>(emptyList()) }
 
     // 🔹 지역 데이터 로드
     LaunchedEffect(regionQuery) {
@@ -234,6 +240,7 @@ fun RegionSelectBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        dragHandle = null,  // ✅ 드래그 핸들 비활성화 (지도 조작 방해 방지)
         modifier = Modifier.fillMaxHeight(0.9f)
     ) {
         Column(
@@ -241,15 +248,43 @@ fun RegionSelectBottomSheet(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
         ) {
-            // 헤더: 지역 이름
-            Text(
-                text = currentRegionName.also {
-                    Log.d("RegionSelect", "📍 UI에 표시되는 지역명: '$it'")
-                },
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+            // 헤더: 지역 이름 + 이전으로 버튼
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = currentRegionName.also {
+                        Log.d("RegionSelect", "📍 UI에 표시되는 지역명: '$it'")
+                    },
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // ✅ 이전으로 돌아가기 버튼
+                if (previousRegionName != null) {
+                    IconButton(
+                        onClick = {
+                            Log.d("RegionSelect", "⬅️ 이전으로: $previousRegionName")
+                            currentRegionName = previousRegionName ?: regionQuery
+                            adminPolygons = previousAdminPolygons
+                            dongLabels = previousDongLabels
+                            previousRegionName = null
+                            previousAdminPolygons = emptyList()
+                            previousDongLabels = emptyList()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "이전으로"
+                        )
+                    }
+                }
+            }
 
             // 로딩 또는 에러 표시
             when {
@@ -341,6 +376,12 @@ fun RegionSelectBottomSheet(
                                                             if (regionInfo != null) {
                                                                 Log.d("RegionSelect", "🖱️ region1=${regionInfo.region1}, region2=${regionInfo.region2}, region3=${regionInfo.region3}")
                                                                 Log.d("RegionSelect", "🖱️ displayName=${regionInfo.displayName}, cityDistrictName=${regionInfo.cityDistrictName}")
+
+                                                                // ✅ 이전 상태 저장 (되돌리기용)
+                                                                previousRegionName = currentRegionName
+                                                                previousAdminPolygons = adminPolygons
+                                                                previousDongLabels = dongLabels
+                                                                Log.d("RegionSelect", "💾 이전 상태 저장: $previousRegionName")
 
                                                                 centerLat = latLng.latitude
                                                                 centerLng = latLng.longitude
