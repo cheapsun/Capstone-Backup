@@ -186,7 +186,7 @@ fun RegionSelectBottomSheet(
 
                 try {
                     // ✅ 1단계: 반투명 채우기 (Polygon)
-                    val mapPoints = DotPoints.fromLatLngList(kakaoCoords)
+                    val mapPoints = DotPoints.fromLatLngArray(kakaoCoords.toTypedArray())
                     val fillStyle = PolygonStyle.from(
                         Color.argb(40, 66, 133, 244)  // 반투명 파란색 채우기 (Material Blue)
                     )
