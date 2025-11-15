@@ -343,10 +343,6 @@ fun RegionSelectBottomSheet(
                                             override fun onMapReady(map: KakaoMap) {
                                                 kakaoMap = map
 
-                                                // ✅ 지도 제스처 활성화
-                                                map.isCompassEnabled = false  // 나침반 비활성화 (불필요)
-                                                map.isScaleMeterEnabled = true  // 축척 표시
-
                                                 centerLat?.let { lat ->
                                                     centerLng?.let { lng ->
                                                         map.moveCamera(
