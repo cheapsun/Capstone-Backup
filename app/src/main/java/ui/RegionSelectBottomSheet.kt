@@ -104,9 +104,19 @@ fun RegionSelectBottomSheet(
             adminPolygons = VWorldService.getAdminBoundary(vworldQuery)
             Log.d("RegionSelect", "✅ 폴리곤 ${adminPolygons.size}개 로드")
 
-            // 4. 동 라벨 표시 (읍/면/동 이름)
-            dongLabels = VWorldService.getDongLabels(vworldQuery)
-            Log.d("RegionSelect", "✅ 동 라벨 ${dongLabels.size}개 로드")
+            // 4. 구 레벨 라벨 생성 (시/군/구 이름만, 읍/면/동 X)
+            dongLabels = adminPolygons.map { polygon ->
+                // 폴리곤 중심점 계산
+                val centerLat = polygon.coordinates.map { it.lat }.average()
+                val centerLng = polygon.coordinates.map { it.lng }.average()
+
+                DongLabel(
+                    name = polygon.name,
+                    centerLat = centerLat,
+                    centerLng = centerLng
+                )
+            }
+            Log.d("RegionSelect", "✅ 구 라벨 ${dongLabels.size}개 생성 (시/군/구 레벨)")
 
             // 5. 지도 카메라 이동
             kakaoMap?.let { map ->
@@ -392,10 +402,18 @@ fun RegionSelectBottomSheet(
                                                                 adminPolygons = VWorldService.getAdminBoundary(vworldQuery)
                                                                 Log.d("RegionSelect", "🖱️ 시/군/구 폴리곤: ${adminPolygons.size}개")
 
-                                                                // ✅ 동 라벨 표시
-                                                                Log.d("RegionSelect", "🖱️ VWorld API 호출: getDongLabels('$vworldQuery')")
-                                                                dongLabels = VWorldService.getDongLabels(vworldQuery)
-                                                                Log.d("RegionSelect", "🖱️ 동 라벨: ${dongLabels.size}개")
+                                                                // ✅ 구 레벨 라벨 생성 (시/군/구 이름만)
+                                                                dongLabels = adminPolygons.map { polygon ->
+                                                                    val centerLat = polygon.coordinates.map { it.lat }.average()
+                                                                    val centerLng = polygon.coordinates.map { it.lng }.average()
+
+                                                                    DongLabel(
+                                                                        name = polygon.name,
+                                                                        centerLat = centerLat,
+                                                                        centerLng = centerLng
+                                                                    )
+                                                                }
+                                                                Log.d("RegionSelect", "🖱️ 구 라벨 ${dongLabels.size}개 생성")
 
                                                                 Log.d("RegionSelect", "✅ 시/군/구 선택 완료: $currentRegionName")
 
