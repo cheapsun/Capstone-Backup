@@ -79,7 +79,7 @@ object VWorldService {
                 query = query,
                 size = size,
                 page = 1,
-                category = "L4",  // 읍면동 레벨
+                category = "",  // 모든 행정구역 레벨 검색
                 crs = "EPSG:4326",
                 format = "json",
                 errorFormat = "json"
