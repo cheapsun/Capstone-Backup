@@ -120,9 +120,9 @@ object KakaoLocalService {
     }
 
     /**
-     * 자동완성용 키워드 검색 (지역/장소명)
-     * - 좌표 제한 없이 전국 검색
-     * - 카카오 API 결과를 그대로 표시 (필터링 없음)
+     * 자동완성용 지역 검색 (주소 검색 우선)
+     * - 주소 검색 API: 행정구역(시/군/구) 중심 - 여행 앱에 적합
+     * - 키워드 검색 API: 관광지/장소 보조
      */
     suspend fun searchKeywordForAutocomplete(
         query: String,
@@ -132,18 +132,44 @@ object KakaoLocalService {
         val svc = api ?: return emptyList()
 
         return try {
-            val resp = svc.searchKeywordSimple(
-                query = query,
-                size = size
-            )
-            // 필터링 없이 카카오 API 결과 그대로 반환
-            resp.documents.map { doc ->
-                AutocompleteResult(
-                    placeName = doc.place_name,
-                    addressName = doc.address_name ?: "",
-                    categoryName = doc.category_name ?: ""
-                )
+            // 1️⃣ 주소 검색 우선 (행정구역)
+            val addressResults = try {
+                val addressResp = svc.searchAddress(query)
+                addressResp.documents.map { doc ->
+                    AutocompleteResult(
+                        placeName = doc.address_name ?: "",
+                        addressName = doc.address_name ?: "",
+                        categoryName = "지역"
+                    )
+                }.filter { it.placeName.isNotBlank() }
+            } catch (e: Exception) {
+                emptyList()
             }
+
+            // 2️⃣ 주소 검색 결과가 충분하면 반환
+            if (addressResults.size >= size) {
+                return addressResults.take(size)
+            }
+
+            // 3️⃣ 부족하면 키워드 검색으로 보완
+            val keywordResults = try {
+                val keywordResp = svc.searchKeywordSimple(
+                    query = query,
+                    size = size - addressResults.size
+                )
+                keywordResp.documents.map { doc ->
+                    AutocompleteResult(
+                        placeName = doc.place_name,
+                        addressName = doc.address_name ?: "",
+                        categoryName = doc.category_name ?: ""
+                    )
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
+
+            // 주소 검색 결과 우선, 키워드 검색 보조
+            (addressResults + keywordResults).take(size)
         } catch (e: Exception) {
             emptyList()
         }
@@ -225,6 +251,7 @@ object KakaoLocalService {
     // --- Address
     private data class AddressResp(val documents: List<AddressDoc> = emptyList())
     private data class AddressDoc(
+        val address_name: String? = null,  // 주소명 (자동완성용)
         val x: String, // 경도
         val y: String  // 위도
     )
