@@ -24,7 +24,8 @@ import com.kakao.vectormap.label.LabelStyles
 import com.kakao.vectormap.label.LabelTextStyle
 import com.kakao.vectormap.shape.Polygon
 import com.kakao.vectormap.shape.PolygonOptions
-import com.kakao.vectormap.shape.PolygonStyles
+import com.kakao.vectormap.shape.PolygonStyle
+import com.kakao.vectormap.shape.MapPoints
 import kotlinx.coroutines.launch
 
 /**
@@ -142,14 +143,17 @@ fun RegionSelectBottomSheet(
                     LatLng.from(it.lat, it.lng)
                 }
 
-                val options = PolygonOptions.from(kakaoCoords)
-                    .setStyles(
-                        PolygonStyles.from(
-                            Color.argb(50, 66, 133, 244),  // 반투명 파란색 채우기
-                            Color.argb(200, 66, 133, 244), // 파란색 테두리
-                            4f                             // 테두리 두께
-                        )
-                    )
+                // Kakao MapPoints 생성
+                val mapPoints = com.kakao.vectormap.shape.MapPoints(kakaoCoords)
+
+                // PolygonStyle 생성
+                val polygonStyle = com.kakao.vectormap.shape.PolygonStyle.from(
+                    Color.argb(50, 66, 133, 244),  // 반투명 파란색 채우기
+                    Color.argb(200, 66, 133, 244), // 파란색 테두리
+                    4f                             // 테두리 두께
+                )
+
+                val options = PolygonOptions.from(mapPoints, polygonStyle)
 
                 shapeManager.layer?.addPolygon(options)
                 Log.d("RegionSelect", "✅ 폴리곤 그림: ${polygon.name}, ${kakaoCoords.size}개 좌표")
@@ -262,7 +266,7 @@ fun RegionSelectBottomSheet(
                                                 }
 
                                                 // 🔹 지도 클릭 시 역지오코딩으로 지역명 업데이트
-                                                map.setOnMapClickListener { _, latLng ->
+                                                map.setOnMapClickListener { _, latLng, _, _ ->
                                                     scope.launch {
                                                         try {
                                                             val regionInfo = KakaoLocalService.coord2regioncode(

@@ -129,24 +129,37 @@ object VWorldService {
         return try {
             when (geometry.type) {
                 "Polygon" -> {
+                    // Polygon: coordinates는 List<List<List<Double>>> 형태
                     // coordinates[0]이 외곽선 (첫 번째 링)
-                    val ring = geometry.coordinates.firstOrNull() ?: emptyList()
-                    ring.map { coord ->
-                        // GeoJSON: [경도, 위도]
-                        LatLng(lat = coord[1], lng = coord[0])
+                    @Suppress("UNCHECKED_CAST")
+                    val rings = geometry.coordinates as? List<List<List<Double>>> ?: return emptyList()
+                    val ring = rings.firstOrNull() ?: return emptyList()
+
+                    ring.mapNotNull { coord ->
+                        if (coord.size >= 2) {
+                            // GeoJSON: [경도, 위도]
+                            LatLng(lat = coord[1], lng = coord[0])
+                        } else null
                     }
                 }
                 "MultiPolygon" -> {
+                    // MultiPolygon: coordinates는 List<List<List<List<Double>>>> 형태
                     // 첫 번째 폴리곤의 첫 번째 링만 사용
-                    val firstPolygon = geometry.coordinates.firstOrNull()?.firstOrNull() ?: emptyList()
-                    firstPolygon.map { coord ->
-                        LatLng(lat = coord[1], lng = coord[0])
+                    @Suppress("UNCHECKED_CAST")
+                    val polygons = geometry.coordinates as? List<List<List<List<Double>>>> ?: return emptyList()
+                    val firstPolygon = polygons.firstOrNull() ?: return emptyList()
+                    val ring = firstPolygon.firstOrNull() ?: return emptyList()
+
+                    ring.mapNotNull { coord ->
+                        if (coord.size >= 2) {
+                            LatLng(lat = coord[1], lng = coord[0])
+                        } else null
                     }
                 }
                 else -> emptyList()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "extractCoordinates failed: ${e.message}")
+            Log.e(TAG, "extractCoordinates failed: ${e.message}", e)
             emptyList()
         }
     }
@@ -197,7 +210,7 @@ private data class Feature(
 
 private data class Geometry(
     @SerializedName("type") val type: String, // "Polygon" or "MultiPolygon"
-    @SerializedName("coordinates") val coordinates: List<List<List<Double>>> // [[[lng, lat], ...]]
+    @SerializedName("coordinates") val coordinates: List<Any> // Dynamic type for Polygon/MultiPolygon
 )
 
 private data class Properties(
