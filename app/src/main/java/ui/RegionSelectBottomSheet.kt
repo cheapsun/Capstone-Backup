@@ -22,10 +22,10 @@ import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
 import com.kakao.vectormap.label.LabelStyles
 import com.kakao.vectormap.label.LabelTextStyle
-import com.kakao.vectormap.shape.Polygon
-import com.kakao.vectormap.shape.PolygonOptions
-import com.kakao.vectormap.shape.PolygonStyle
-import com.kakao.vectormap.shape.MapPoints
+import com.kakao.vectormap.route.RouteLineOptions
+import com.kakao.vectormap.route.RouteLineSegment
+import com.kakao.vectormap.route.RouteLineStyle
+import com.kakao.vectormap.route.RouteLineStyles
 import kotlinx.coroutines.launch
 
 /**
@@ -122,20 +122,20 @@ fun RegionSelectBottomSheet(
         }
     }
 
-    // 🔹 지도에 폴리곤 및 라벨 표시
+    // 🔹 지도에 경계선 및 라벨 표시
     LaunchedEffect(kakaoMap, adminPolygons, dongLabels) {
         val map = kakaoMap ?: return@LaunchedEffect
-        val shapeManager = map.shapeManager ?: return@LaunchedEffect
+        val routeLineManager = map.routeLineManager ?: return@LaunchedEffect
         val labelManager = map.labelManager ?: return@LaunchedEffect
 
         try {
-            // 기존 폴리곤 및 라벨 제거
-            shapeManager.layer?.removeAll()
+            // 기존 경계선 및 라벨 제거
+            routeLineManager.layer?.removeAll()
             labelManager.layer?.removeAll()
 
-            Log.d("RegionSelect", "🎨 폴리곤/라벨 그리기 시작")
+            Log.d("RegionSelect", "🎨 경계선/라벨 그리기 시작")
 
-            // 폴리곤 그리기
+            // 폴리곤 그리기 (경계선만 표시 - RouteLine 사용)
             adminPolygons.forEach { polygon ->
                 if (polygon.coordinates.isEmpty()) return@forEach
 
@@ -143,20 +143,25 @@ fun RegionSelectBottomSheet(
                     LatLng.from(it.lat, it.lng)
                 }
 
-                // Kakao MapPoints 생성
-                val mapPoints = com.kakao.vectormap.shape.MapPoints(kakaoCoords)
+                try {
+                    // RouteLine을 사용하여 경계선 그리기
+                    val segment = RouteLineSegment.from(kakaoCoords)
+                        .setStyles(
+                            RouteLineStyles.from(
+                                RouteLineStyle.from(
+                                    4f,  // 선 두께
+                                    Color.argb(200, 66, 133, 244)  // 파란색
+                                )
+                            )
+                        )
 
-                // PolygonStyle 생성
-                val polygonStyle = com.kakao.vectormap.shape.PolygonStyle.from(
-                    Color.argb(50, 66, 133, 244),  // 반투명 파란색 채우기
-                    Color.argb(200, 66, 133, 244), // 파란색 테두리
-                    4f                             // 테두리 두께
-                )
+                    val options = RouteLineOptions.from(segment)
+                    routeLineManager.layer?.addRouteLine(options)?.show()
 
-                val options = PolygonOptions.from(mapPoints, polygonStyle)
-
-                shapeManager.layer?.addPolygon(options)
-                Log.d("RegionSelect", "✅ 폴리곤 그림: ${polygon.name}, ${kakaoCoords.size}개 좌표")
+                    Log.d("RegionSelect", "✅ 경계선 그림: ${polygon.name}, ${kakaoCoords.size}개 좌표")
+                } catch (e: Exception) {
+                    Log.e("RegionSelect", "❌ 경계선 그리기 실패: ${e.message}", e)
+                }
             }
 
             // 동 라벨 그리기
