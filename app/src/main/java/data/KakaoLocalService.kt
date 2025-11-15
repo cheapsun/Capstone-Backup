@@ -1,5 +1,6 @@
 package com.example.project_2.data
 
+import android.util.Log
 import com.example.project_2.domain.model.Category
 import com.example.project_2.domain.model.Place
 import okhttp3.Interceptor
@@ -19,6 +20,7 @@ import java.util.concurrent.TimeUnit
  */
 object KakaoLocalService {
 
+    private const val TAG = "KakaoLocal"
     private const val BASE_URL = "https://dapi.kakao.com/"
     private var api: KakaoLocalApi? = null
 
