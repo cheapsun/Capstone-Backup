@@ -27,7 +27,9 @@ data class MainUiState(
     val lastSearchCenter: Pair<Double, Double>? = null,  // (lat, lng)
     val lastSearchCategories: Set<Category> = emptySet(),
     // 🔹 지역 선택 BottomSheet
-    val showRegionSelectSheet: Boolean = false
+    val showRegionSelectSheet: Boolean = false,
+    // 🔹 선택된 지역의 폴리곤 정보
+    val regionPolygons: List<com.example.project_2.data.AdminPolygon> = emptyList()
 )
 
 class MainViewModel(
@@ -47,7 +49,7 @@ class MainViewModel(
         _ui.update { it.copy(filter = newFilter) }
     }
 
-    /** "맞춤 루트 생성하기" → 단일 중심점 검색 (기본 전략) */
+    /** "맞춤 루트 생성하기" → 폴리곤 기반 또는 중심점 검색 */
     fun onSearchClicked() {
         if (searchInFlight) {
             Log.w(TAG, "onSearchClicked: already searching, ignored")
@@ -56,8 +58,10 @@ class MainViewModel(
         searchInFlight = true
 
         val f0 = _ui.value.filter
+        val polygons = _ui.value.regionPolygons
+
         viewModelScope.launch {
-            Log.d(TAG, "onSearchClicked: start, filter=$f0")
+            Log.d(TAG, "onSearchClicked: start, filter=$f0, polygons=${polygons.size}")
             _ui.update { it.copy(loading = true, error = null) }
 
             runCatching {
@@ -67,22 +71,37 @@ class MainViewModel(
                 val cats = if (f0.categories.isEmpty()) setOf(Category.FOOD) else f0.categories
                 val f = f0.copy(categories = cats, region = region)
 
-                // 지역 좌표 조회
-                val center = KakaoLocalService.geocode(region)
-                    ?: KakaoLocalService.geocode("서울")
-                    ?: error("지역 좌표를 찾을 수 없습니다: $region")
+                // ✅ 폴리곤이 있으면 폴리곤 기반 검색, 없으면 중심점 검색
+                if (polygons.isNotEmpty()) {
+                    Log.d(TAG, "Using polygon-based search with ${polygons.size} polygons")
 
-                val (lat, lng) = center
-                Log.d(TAG, "Geocode result: ($lat, $lng)")
+                    // 모든 폴리곤의 좌표를 하나의 리스트로 합침
+                    val allCoords = polygons.flatMap { it.coordinates }
 
-                // 단일 중심점 검색 (3km 반경)
-                repo.recommendWithGpt(
-                    filter = f,
-                    centerLat = lat,
-                    centerLng = lng,
-                    radiusMeters = 3000,
-                    candidateSize = 15
-                )
+                    val realRepo = repo as? RealTravelRepository
+                        ?: error("Repository does not support polygon search")
+
+                    realRepo.recommendPolygonWithGpt(filter = f, polygonCoords = allCoords)
+                } else {
+                    Log.d(TAG, "Using center-based search (no polygon)")
+
+                    // 지역 좌표 조회
+                    val center = KakaoLocalService.geocode(region)
+                        ?: KakaoLocalService.geocode("서울")
+                        ?: error("지역 좌표를 찾을 수 없습니다: $region")
+
+                    val (lat, lng) = center
+                    Log.d(TAG, "Geocode result: ($lat, $lng)")
+
+                    // 단일 중심점 검색 (3km 반경)
+                    repo.recommendWithGpt(
+                        filter = f,
+                        centerLat = lat,
+                        centerLng = lng,
+                        radiusMeters = 3000,
+                        candidateSize = 15
+                    )
+                }
             }.onSuccess { res ->
                 Log.d(TAG, "onSearchClicked: success, updating UI with ${res.places.size} places")
                 // 결과와 함께 검색 정보도 저장 (확장 검색에 사용)
@@ -144,6 +163,20 @@ class MainViewModel(
         } else {
             // 2글자 미만이면 자동완성 숨김
             _ui.update { it.copy(showAutoComplete = false, autoCompleteSuggestions = emptyList()) }
+        }
+    }
+
+    /**
+     * 지역명과 폴리곤 정보를 함께 설정 (지도에서 선택 시)
+     */
+    fun setRegionWithPolygon(region: String, polygons: List<com.example.project_2.data.AdminPolygon>) {
+        Log.d(TAG, "setRegionWithPolygon: $region, ${polygons.size} polygons")
+        _ui.update {
+            it.copy(
+                filter = it.filter.copy(region = region),
+                regionPolygons = polygons,
+                showAutoComplete = false
+            )
         }
     }
 

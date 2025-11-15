@@ -49,7 +49,7 @@ import kotlinx.coroutines.launch
 fun RegionSelectBottomSheet(
     regionQuery: String,
     onDismiss: () -> Unit,
-    onRegionSelected: (String) -> Unit  // ✅ 단순화: 지역명만 반환
+    onRegionSelected: (String, List<AdminPolygon>) -> Unit  // ✅ 지역명 + 폴리곤 정보 반환
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -523,10 +523,10 @@ fun RegionSelectBottomSheet(
             if (!isLoading && errorMessage == null) {
                 Spacer(Modifier.height(16.dp))
 
-                // ✅ 지역 선택 완료 버튼 (검색 칸에 입력)
+                // ✅ 지역 선택 완료 버튼 (검색 칸에 입력 + 폴리곤 정보 전달)
                 Button(
                     onClick = {
-                        onRegionSelected(currentRegionName)
+                        onRegionSelected(currentRegionName, adminPolygons)
                         onDismiss()
                     },
                     modifier = Modifier

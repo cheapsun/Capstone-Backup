@@ -209,9 +209,9 @@ fun MainScreen(
             RegionSelectBottomSheet(
                 regionQuery = ui.filter.region.ifBlank { "서울" },
                 onDismiss = vm::hideRegionSelectSheet,
-                onRegionSelected = { regionName ->
-                    // ✅ 검색 칸에 지역명 입력 (바로 검색하지 않음)
-                    vm.setRegion(regionName)
+                onRegionSelected = { regionName, polygons ->
+                    // ✅ 검색 칸에 지역명 + 폴리곤 정보 입력
+                    vm.setRegionWithPolygon(regionName, polygons)
                 }
             )
         }
