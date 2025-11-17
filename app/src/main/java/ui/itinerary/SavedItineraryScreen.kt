@@ -190,9 +190,11 @@ fun SavedItineraryScreen(
                 Button(
                     onClick = {
                         if (editingName.isNotBlank()) {
-                            itinerary = itinerary?.copy(name = editingName)
-                            storage.saveItinerary(itinerary!!)
-                            Toast.makeText(context, "이름이 변경되었습니다", Toast.LENGTH_SHORT).show()
+                            itinerary?.let {
+                                it.name = editingName  // 직접 수정 (copy() 대신)
+                                storage.saveItinerary(it)
+                                Toast.makeText(context, "이름이 변경되었습니다", Toast.LENGTH_SHORT).show()
+                            }
                             showNameEditDialog = false
                         }
                     },
