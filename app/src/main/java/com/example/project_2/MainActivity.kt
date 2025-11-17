@@ -96,9 +96,11 @@ class MainActivity : ComponentActivity() {
 
                             recResult?.let { rec ->
                                 val regionHint = uiState.filter.region.ifBlank { null }
+                                val mandatoryPlaceName = uiState.filter.mandatoryPlace.ifBlank { null }
                                 ResultScreen(
                                     rec = rec,
                                     regionHint = regionHint,
+                                    mandatoryPlaceName = mandatoryPlaceName,
                                     onNavigateToItinerary = { selectedPlaces ->
                                         mainVm.setSelectedPlacesForItinerary(selectedPlaces)
                                         navController.navigate("itinerary")

@@ -189,99 +189,98 @@ $placesText
         Log.d(TAG, "Using fallback itinerary generation for $days days with ${places.size} places")
 
         // Separate places by category
-        val foodPlaces = places.filter { it.category == Category.FOOD }
-        val cafePlaces = places.filter { it.category == Category.CAFE }
-        val nightPlaces = places.filter { it.category == Category.NIGHT }
+        val foodPlaces = places.filter { it.category == Category.FOOD }.toMutableList()
+        val cafePlaces = places.filter { it.category == Category.CAFE }.toMutableList()
+        val nightPlaces = places.filter { it.category == Category.NIGHT }.toMutableList()
         val stayPlaces = places.filter { it.category == Category.STAY }
         val otherPlaces = places.filter {
             it.category !in setOf(Category.FOOD, Category.CAFE, Category.NIGHT, Category.STAY)
-        }
+        }.toMutableList()
 
         Log.d(TAG, "Category distribution: FOOD=${foodPlaces.size}, CAFE=${cafePlaces.size}, " +
                 "NIGHT=${nightPlaces.size}, STAY=${stayPlaces.size}, OTHER=${otherPlaces.size}")
 
         val schedules = mutableListOf<DaySchedule>()
-
-        // Distribute places across days
-        val otherPerDay = (otherPlaces.size + days - 1) / days
-        val cafePerDay = (cafePlaces.size + days - 1) / days
-        val nightPerDay = (nightPlaces.size + days - 1) / days
+        var foodIndex = 0
+        var cafeIndex = 0
+        var otherIndex = 0
+        var nightIndex = 0
 
         for (dayIndex in 0 until days) {
             val slots = mutableListOf<TimeSlot>()
             var currentTime = LocalTime.of(9, 0)
 
-            // Morning slot: Other activities (관광, 문화, 체험 등)
-            val otherStart = dayIndex * otherPerDay
-            val otherEnd = minOf(otherStart + (otherPerDay / 2).coerceAtLeast(1), otherPlaces.size)
-            val morningPlaces = if (otherStart < otherPlaces.size) {
-                otherPlaces.subList(otherStart, otherEnd)
-            } else emptyList()
-
-            morningPlaces.forEach { place ->
+            // ===== 오전 (09:00-12:00) =====
+            // OTHER가 있으면 사용, 없으면 FOOD(브런치) 또는 CAFE
+            if (otherIndex < otherPlaces.size) {
+                val place = otherPlaces[otherIndex++]
                 val duration = getDurationForCategory(place.category)
                 slots.add(createTimeSlot(place, currentTime, duration))
-                currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(20) // 20분 이동
+                currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(20)
+            } else if (foodIndex < foodPlaces.size && currentTime.hour < 11) {
+                // 브런치 타임 (09:00-11:00)
+                val place = foodPlaces[foodIndex++]
+                slots.add(createTimeSlot(place, currentTime, 90))
+                currentTime = currentTime.plusMinutes(90).plusMinutes(15)
+            } else if (cafeIndex < cafePlaces.size) {
+                // 모닝 카페
+                val place = cafePlaces[cafeIndex++]
+                slots.add(createTimeSlot(place, currentTime, 60))
+                currentTime = currentTime.plusMinutes(60).plusMinutes(15)
             }
 
-            // Lunch at 12:00
+            // ===== 점심 (12:00-13:30) =====
             currentTime = LocalTime.of(12, 0)
-            val lunchPlace = foodPlaces.getOrNull(dayIndex * 2)
-            if (lunchPlace != null) {
-                slots.add(createTimeSlot(lunchPlace, currentTime, 90))
+            if (foodIndex < foodPlaces.size) {
+                val place = foodPlaces[foodIndex++]
+                slots.add(createTimeSlot(place, currentTime, 90))
             } else {
                 slots.add(createMealSlot(currentTime, 90))
             }
             currentTime = LocalTime.of(13, 30)
 
-            // Afternoon: Remaining other activities + cafes
-            val afternoonOtherStart = otherEnd
-            val afternoonOtherEnd = minOf(otherStart + otherPerDay, otherPlaces.size)
-            val afternoonPlaces = if (afternoonOtherStart < otherPlaces.size) {
-                otherPlaces.subList(afternoonOtherStart, afternoonOtherEnd)
-            } else emptyList()
-
-            afternoonPlaces.forEach { place ->
-                val duration = getDurationForCategory(place.category)
-                slots.add(createTimeSlot(place, currentTime, duration))
-                currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(20)
-            }
-
-            // Cafe time (14:00-17:00)
-            val cafeStart = dayIndex * cafePerDay
-            val cafeEnd = minOf(cafeStart + cafePerDay, cafePlaces.size)
-            val dayCafes = if (cafeStart < cafePlaces.size) {
-                cafePlaces.subList(cafeStart, cafeEnd)
-            } else emptyList()
-
-            dayCafes.forEach { cafe ->
-                if (currentTime.hour < 17) {
-                    currentTime = maxOf(currentTime, LocalTime.of(14, 0))
-                    slots.add(createTimeSlot(cafe, currentTime, 60))
-                    currentTime = currentTime.plusMinutes(60).plusMinutes(15)
+            // ===== 오후 (13:30-18:00) =====
+            // OTHER, CAFE, 추가 FOOD를 번갈아가며 배치
+            while (currentTime.hour < 18) {
+                val nextPlace = when {
+                    otherIndex < otherPlaces.size -> otherPlaces[otherIndex++]
+                    cafeIndex < cafePlaces.size -> cafePlaces[cafeIndex++]
+                    foodIndex < foodPlaces.size -> foodPlaces[foodIndex++]
+                    else -> break
                 }
+
+                val duration = getDurationForCategory(nextPlace.category)
+                slots.add(createTimeSlot(nextPlace, currentTime, duration))
+                currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(20)
+
+                if (currentTime.hour >= 18) break
             }
 
-            // Dinner at 18:00
+            // ===== 저녁 (18:00-19:30) =====
             currentTime = LocalTime.of(18, 0)
-            val dinnerPlace = foodPlaces.getOrNull(dayIndex * 2 + 1)
-            if (dinnerPlace != null) {
-                slots.add(createTimeSlot(dinnerPlace, currentTime, 90))
+            if (foodIndex < foodPlaces.size) {
+                val place = foodPlaces[foodIndex++]
+                slots.add(createTimeSlot(place, currentTime, 90))
             } else {
                 slots.add(createMealSlot(currentTime, 90))
             }
             currentTime = LocalTime.of(19, 30)
 
-            // Evening: Night spots
-            val nightStart = dayIndex * nightPerDay
-            val nightEnd = minOf(nightStart + nightPerDay, nightPlaces.size)
-            val nightSpots = if (nightStart < nightPlaces.size) {
-                nightPlaces.subList(nightStart, nightEnd)
-            } else emptyList()
+            // ===== 야간 (19:30-22:00) =====
+            // NIGHT > CAFE > FOOD 순서로 배치
+            while (currentTime.hour < 22) {
+                val nextPlace = when {
+                    nightIndex < nightPlaces.size -> nightPlaces[nightIndex++]
+                    cafeIndex < cafePlaces.size -> cafePlaces[cafeIndex++]
+                    foodIndex < foodPlaces.size -> foodPlaces[foodIndex++]
+                    else -> break
+                }
 
-            nightSpots.forEach { night ->
-                slots.add(createTimeSlot(night, currentTime, 90))
-                currentTime = currentTime.plusMinutes(90).plusMinutes(15)
+                val duration = getDurationForCategory(nextPlace.category)
+                slots.add(createTimeSlot(nextPlace, currentTime, duration))
+                currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(15)
+
+                if (currentTime.hour >= 22) break
             }
 
             schedules.add(DaySchedule(day = dayIndex + 1, timeSlots = slots))

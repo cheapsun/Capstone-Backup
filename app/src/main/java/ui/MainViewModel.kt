@@ -86,7 +86,35 @@ class MainViewModel(
                 Log.d(TAG, "recommendWithGpt returned: places=${result.places.size}, " +
                         "first=${result.places.firstOrNull()?.name ?: "none"}")
 
-                result
+                // ✅ mandatoryPlace 검색 및 추가
+                val finalPlaces = if (f0.mandatoryPlace.isNotBlank()) {
+                    Log.d(TAG, "Searching mandatory place: ${f0.mandatoryPlace}")
+                    try {
+                        val mandatoryResults = KakaoLocalService.searchKeyword(
+                            query = f0.mandatoryPlace,
+                            x = lng,
+                            y = lat,
+                            radius = 20000,
+                            size = 1
+                        )
+                        if (mandatoryResults.isNotEmpty()) {
+                            val mandatoryPlace = mandatoryResults.first()
+                            Log.d(TAG, "Found mandatory place: ${mandatoryPlace.name}")
+                            // 필수 장소를 맨 앞에 추가
+                            listOf(mandatoryPlace) + result.places
+                        } else {
+                            Log.w(TAG, "Mandatory place not found: ${f0.mandatoryPlace}")
+                            result.places
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to search mandatory place: ${e.message}", e)
+                        result.places
+                    }
+                } else {
+                    result.places
+                }
+
+                result.copy(places = finalPlaces)
             }.onSuccess { res ->
                 Log.d(TAG, "onSearchClicked: success, updating UI with ${res.places.size} places")
                 _ui.update { it.copy(loading = false, lastResult = res) }

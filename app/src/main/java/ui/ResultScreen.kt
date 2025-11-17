@@ -75,9 +75,10 @@ import java.net.URLEncoder
 fun ResultScreen(
     rec: RecommendationResult,
     regionHint: String? = null,   // ✅ 사용자가 입력했던 지역 (예: "광주 상무동")
+    mandatoryPlaceName: String? = null,  // ✅ 필수 장소 이름 (자동 선택용)
     onNavigateToItinerary: (List<Place>) -> Unit = {}  // ✅ 일정 생성 화면으로 이동
 ) {
-    Log.d("UI", "ResultScreen received ${rec.places.size} places (topPicks=${rec.topPicks.size})")
+    Log.d("UI", "ResultScreen received ${rec.places.size} places (topPicks=${rec.topPicks.size}, mandatoryPlace=$mandatoryPlaceName)")
     rec.places.forEachIndexed { i, p ->
         Log.d("UI", "[$i] ${p.name} (${p.lat}, ${p.lng}) reason=${rec.gptReasons[p.id] ?: "없음"}")
     }
@@ -88,6 +89,18 @@ fun ResultScreen(
 
     // 🔹 선택된 장소 리스트 (드래그 순서 유지를 위해 mutableStateListOf 사용)
     val selectedPlaces = remember { mutableStateListOf<Place>() }
+
+    // ✅ 필수 장소 자동 선택
+    LaunchedEffect(mandatoryPlaceName) {
+        if (!mandatoryPlaceName.isNullOrBlank() && rec.places.isNotEmpty()) {
+            // 첫 번째 장소가 필수 장소라고 가정 (MainViewModel에서 맨 앞에 추가함)
+            val mandatoryPlace = rec.places.firstOrNull()
+            if (mandatoryPlace != null && !selectedPlaces.contains(mandatoryPlace)) {
+                selectedPlaces.add(mandatoryPlace)
+                Log.d("UI", "Auto-selected mandatory place: ${mandatoryPlace.name}")
+            }
+        }
+    }
 
     // 🔹 T-Map 라우팅 상태
     var routeSegments by remember { mutableStateOf<List<RouteSegment>>(emptyList()) }
@@ -609,6 +622,7 @@ fun ResultScreen(
                             p = p,
                             reason = rec.gptReasons[p.id],
                             isSelected = selectedPlaces.any { it.id == p.id },
+                            isMandatory = !mandatoryPlaceName.isNullOrBlank() && p == rec.places.firstOrNull(),
                             onView = { focusOn(p) },
                             onToggle = {
                                 toggleSelect(p)
@@ -629,6 +643,7 @@ fun ResultScreen(
                 topIds = topIds,
                 selectedPlaces = selectedPlaces,
                 regionHint = regionHint,
+                mandatoryPlaceName = mandatoryPlaceName,
                 isExpanded = isPlaceListExpanded,
                 onToggleExpand = { isPlaceListExpanded = !isPlaceListExpanded },
                 onToggle = { place ->
@@ -1162,6 +1177,7 @@ private fun PlaceRow(
     isSelected: Boolean,
     aiMarked: Boolean,
     catTop: Boolean,
+    isMandatory: Boolean = false,
     regionHint: String? = null,
     onToggle: () -> Unit
 ) {
@@ -1175,14 +1191,25 @@ private fun PlaceRow(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    p.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
-                )
+                ) {
+                    if (isMandatory) {
+                        Text(
+                            text = "⭐ ",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Text(
+                        p.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 // 🔹 가게명 오른쪽 작은 "바로가기"
                 TextButton(
                     onClick = {
@@ -1282,6 +1309,7 @@ private fun TopPickCard(
     p: Place,
     reason: String?,
     isSelected: Boolean,
+    isMandatory: Boolean = false,
     onView: () -> Unit,
     onToggle: () -> Unit
 ) {
@@ -1298,14 +1326,24 @@ private fun TopPickCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = p.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                SmallBadge("카테고리 Top")
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isMandatory) {
+                        Text(
+                            text = "⭐ ",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                    }
+                    Text(
+                        text = p.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                SmallBadge(if (isMandatory) "필수 장소" else "카테고리 Top")
             }
 
             Spacer(Modifier.height(4.dp))
@@ -1661,6 +1699,7 @@ private fun RecommendedPlacesCard(
     topIds: Set<String>,
     selectedPlaces: List<Place>,
     regionHint: String?,
+    mandatoryPlaceName: String? = null,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     onToggle: (Place) -> Unit
@@ -1736,6 +1775,7 @@ private fun RecommendedPlacesCard(
                         isSelected = selectedPlaces.any { it.id == p.id },
                         aiMarked = aiTopIds.contains(p.id),
                         catTop = topIds.contains(p.id),
+                        isMandatory = !mandatoryPlaceName.isNullOrBlank() && p == places.firstOrNull(),
                         regionHint = regionHint,
                         onToggle = { onToggle(p) }
                     )
