@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Save
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
 fun ItineraryScreen(
     selectedPlaces: List<Place>,
     filter: FilterState,
+    autoAddMeals: Boolean = false,
     onBack: () -> Unit,
     onNavigateToMap: (Itinerary) -> Unit = {},
     onSaveItinerary: (Itinerary) -> Unit = {}
@@ -33,10 +35,10 @@ fun ItineraryScreen(
     val scope = rememberCoroutineScope()
 
     // 일정 생성
-    LaunchedEffect(selectedPlaces) {
+    LaunchedEffect(selectedPlaces, autoAddMeals) {
         isLoading = true
         val useCase = ItineraryUseCase()
-        itinerary = useCase.generateItinerary(selectedPlaces, filter)
+        itinerary = useCase.generateItinerary(selectedPlaces, filter, autoAddMeals)
         isLoading = false
     }
 
@@ -182,20 +184,32 @@ private fun DayScheduleView(day: DaySchedule) {
 
         // 시간대별 일정
         items(day.timeSlots) { slot ->
-            TimeSlotCard(slot = slot)
+            TimeSlotCard(
+                slot = slot,
+                onDelete = {
+                    // TimeSlot 삭제
+                    day.timeSlots.remove(slot)
+                    // UI 업데이트를 위해 itinerary를 재할당
+                    itinerary = itinerary?.copy(days = itinerary!!.days)
+                }
+            )
         }
     }
 }
 
 @Composable
-private fun TimeSlotCard(slot: TimeSlot) {
+private fun TimeSlotCard(
+    slot: TimeSlot,
+    onDelete: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             // 시간
             Column(
@@ -260,6 +274,15 @@ private fun TimeSlotCard(slot: TimeSlot) {
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+            }
+
+            // 삭제 버튼
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "삭제",
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
     }

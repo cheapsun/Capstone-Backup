@@ -20,13 +20,15 @@ class ItineraryUseCase(
      * 일정 생성 (간단 버전)
      * @param selectedPlaces 사용자가 선택한 장소 리스트
      * @param filter 사용자 필터 (기간, 인원, 필수 장소 등)
+     * @param autoAddMeals 식사 시간 자동 추가 여부
      * @return 생성된 일정
      */
     suspend fun generateItinerary(
         selectedPlaces: List<Place>,
-        filter: FilterState
+        filter: FilterState,
+        autoAddMeals: Boolean = false
     ): Itinerary {
-        Log.d(TAG, "generateItinerary: ${selectedPlaces.size} places, ${filter.duration.toDays()} days")
+        Log.d(TAG, "generateItinerary: ${selectedPlaces.size} places, ${filter.duration.toDays()} days, autoAddMeals=$autoAddMeals")
 
         val days = filter.duration.toDays()
 
@@ -39,13 +41,13 @@ class ItineraryUseCase(
         } catch (e: Exception) {
             Log.e(TAG, "GPT call failed, using fallback", e)
             // GPT 실패 시 간단한 fallback 로직
-            return generateFallbackItinerary(selectedPlaces, days)
+            return generateFallbackItinerary(selectedPlaces, days, autoAddMeals)
         }
 
         Log.d(TAG, "GPT Response:\n$gptResponse")
 
         // GPT 응답 파싱
-        val daySchedules = parseGptResponse(gptResponse, selectedPlaces, days)
+        val daySchedules = parseGptResponse(gptResponse, selectedPlaces, days, autoAddMeals)
 
         return Itinerary(days = daySchedules)
     }
@@ -125,7 +127,8 @@ $placesText
     private fun parseGptResponse(
         gptResponse: String,
         places: List<Place>,
-        days: Int
+        days: Int,
+        autoAddMeals: Boolean
     ): List<DaySchedule> {
         return try {
             val json = sanitizeJson(gptResponse)
@@ -178,15 +181,16 @@ $placesText
             schedules
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse GPT response", e)
-            generateFallbackItinerary(places, days).days
+            generateFallbackItinerary(places, days, autoAddMeals).days
         }
     }
 
     private fun generateFallbackItinerary(
         places: List<Place>,
-        days: Int
+        days: Int,
+        autoAddMeals: Boolean
     ): Itinerary {
-        Log.d(TAG, "Using fallback itinerary generation for $days days with ${places.size} places")
+        Log.d(TAG, "Using fallback itinerary generation for $days days with ${places.size} places, autoAddMeals=$autoAddMeals")
 
         // Separate places by category
         val foodPlaces = places.filter { it.category == Category.FOOD }.toMutableList()
@@ -234,7 +238,7 @@ $placesText
             if (foodIndex < foodPlaces.size) {
                 val place = foodPlaces[foodIndex++]
                 slots.add(createTimeSlot(place, currentTime, 90))
-            } else {
+            } else if (autoAddMeals) {
                 slots.add(createMealSlot(currentTime, 90))
             }
             currentTime = LocalTime.of(13, 30)
@@ -261,7 +265,7 @@ $placesText
             if (foodIndex < foodPlaces.size) {
                 val place = foodPlaces[foodIndex++]
                 slots.add(createTimeSlot(place, currentTime, 90))
-            } else {
+            } else if (autoAddMeals) {
                 slots.add(createMealSlot(currentTime, 90))
             }
             currentTime = LocalTime.of(19, 30)

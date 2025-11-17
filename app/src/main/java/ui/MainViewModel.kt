@@ -24,7 +24,9 @@ data class MainUiState(
     val autocompleteSuggestions: List<KakaoLocalService.AutocompleteResult> = emptyList(),
     val showAutocomplete: Boolean = false,
     // 일정 생성용 선택된 장소
-    val selectedPlacesForItinerary: List<Place> = emptyList()
+    val selectedPlacesForItinerary: List<Place> = emptyList(),
+    // 식사 시간 자동 추가 여부
+    val autoAddMeals: Boolean = false
 )
 
 class MainViewModel(
@@ -242,6 +244,11 @@ class MainViewModel(
     fun setSelectedPlacesForItinerary(places: List<Place>) {
         Log.d(TAG, "setSelectedPlacesForItinerary: ${places.size} places")
         _ui.update { it.copy(selectedPlacesForItinerary = places) }
+    }
+
+    fun setAutoAddMeals(autoAdd: Boolean) {
+        Log.d(TAG, "setAutoAddMeals: $autoAdd")
+        _ui.update { it.copy(autoAddMeals = autoAdd) }
     }
 
     fun consumeResult() {

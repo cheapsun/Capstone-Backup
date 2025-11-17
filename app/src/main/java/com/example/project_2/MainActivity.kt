@@ -101,8 +101,9 @@ class MainActivity : ComponentActivity() {
                                     rec = rec,
                                     regionHint = regionHint,
                                     mandatoryPlaceName = mandatoryPlaceName,
-                                    onNavigateToItinerary = { selectedPlaces ->
+                                    onNavigateToItinerary = { selectedPlaces, autoAddMeals ->
                                         mainVm.setSelectedPlacesForItinerary(selectedPlaces)
+                                        mainVm.setAutoAddMeals(autoAddMeals)
                                         navController.navigate("itinerary")
                                     }
                                 )
@@ -119,11 +120,13 @@ class MainActivity : ComponentActivity() {
                         composable("itinerary") {
                             val uiState by mainVm.ui.collectAsState()
                             val selectedPlaces = uiState.selectedPlacesForItinerary
+                            val autoAddMeals = uiState.autoAddMeals
 
                             if (selectedPlaces.isNotEmpty()) {
                                 com.example.project_2.ui.itinerary.ItineraryScreen(
                                     selectedPlaces = selectedPlaces,
                                     filter = uiState.filter,
+                                    autoAddMeals = autoAddMeals,
                                     onBack = {
                                         navController.popBackStack()
                                     },

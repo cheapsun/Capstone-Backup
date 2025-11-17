@@ -76,7 +76,7 @@ fun ResultScreen(
     rec: RecommendationResult,
     regionHint: String? = null,   // ✅ 사용자가 입력했던 지역 (예: "광주 상무동")
     mandatoryPlaceName: String? = null,  // ✅ 필수 장소 이름 (자동 선택용)
-    onNavigateToItinerary: (List<Place>) -> Unit = {}  // ✅ 일정 생성 화면으로 이동
+    onNavigateToItinerary: (List<Place>, Boolean) -> Unit = { _, _ -> }  // ✅ 일정 생성 화면으로 이동 (places, autoAddMeals)
 ) {
     Log.d("UI", "ResultScreen received ${rec.places.size} places (topPicks=${rec.topPicks.size}, mandatoryPlace=$mandatoryPlaceName)")
     rec.places.forEachIndexed { i, p ->
@@ -86,6 +86,7 @@ fun ResultScreen(
     var kakaoMap by remember { mutableStateOf<KakaoMap?>(null) }
     val labelPlaceMap = remember { mutableMapOf<Label, Place>() }
     var highlightedId by remember { mutableStateOf<String?>(null) }
+    var showMealDialog by remember { mutableStateOf(false) }
 
     // 🔹 선택된 장소 리스트 (드래그 순서 유지를 위해 mutableStateListOf 사용)
     val selectedPlaces = remember { mutableStateListOf<Place>() }
@@ -696,7 +697,15 @@ fun ResultScreen(
                     // 일정 생성하기 버튼
                     Button(
                         onClick = {
-                            onNavigateToItinerary(selectedPlaces.toList())
+                            // FOOD 장소 개수 확인
+                            val foodCount = selectedPlaces.count { it.category == Category.FOOD }
+                            if (foodCount < 2) {
+                                // 맛집이 부족하면 다이얼로그 표시
+                                showMealDialog = true
+                            } else {
+                                // 충분하면 바로 일정 생성 (식사 자동 추가 불필요)
+                                onNavigateToItinerary(selectedPlaces.toList(), false)
+                            }
                         },
                         enabled = selectedPlaces.size >= 3,
                         modifier = Modifier
@@ -776,6 +785,18 @@ fun ResultScreen(
                 Toast.makeText(context, "루트가 저장되었습니다", Toast.LENGTH_SHORT).show()
                 showSaveDialog = false
                 routeNameInput = ""
+            }
+        )
+    }
+
+    // 🔹 식사 시간 자동 추가 확인 다이얼로그
+    if (showMealDialog) {
+        MealAutoInsertDialog(
+            foodCount = selectedPlaces.count { it.category == Category.FOOD },
+            onDismiss = { showMealDialog = false },
+            onConfirm = { autoAdd ->
+                showMealDialog = false
+                onNavigateToItinerary(selectedPlaces.toList(), autoAdd)
             }
         )
     }
@@ -1681,6 +1702,69 @@ private fun SaveRouteDialog(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("저장")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 🔹 식사 시간 자동 추가 확인 다이얼로그
+ */
+@Composable
+private fun MealAutoInsertDialog(
+    foodCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Boolean) -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    "식사 시간 추가",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    buildString {
+                        append("선택한 장소에 맛집이 ")
+                        append(if (foodCount == 0) "없습니다." else "${foodCount}개만 있습니다.")
+                        append("\n\n")
+                        append("점심(12:00)과 저녁(18:00) 식사 시간을 ")
+                        append("자동으로 추가할까요?")
+                        append("\n\n")
+                        append("※ 일정 화면에서 언제든지 삭제할 수 있습니다.")
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { onConfirm(false) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("추가 안 함")
+                    }
+
+                    Button(
+                        onClick = { onConfirm(true) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("추가하기")
                     }
                 }
             }
