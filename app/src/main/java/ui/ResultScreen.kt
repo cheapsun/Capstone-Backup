@@ -52,6 +52,7 @@ import androidx.core.content.ContextCompat
 import org.burnoutcrew.reorderable.*
 import com.example.project_2.data.RouteStorage
 import com.example.project_2.data.route.TmapPedestrianService
+import com.example.project_2.domain.model.Category
 import com.example.project_2.domain.model.Place
 import com.example.project_2.domain.model.RecommendationResult
 import com.example.project_2.domain.model.RouteSegment

@@ -114,7 +114,13 @@ fun ItineraryScreen(
                         // 선택된 Day의 일정
                         if (selectedDayTab < itinerary!!.days.size) {
                             DayScheduleView(
-                                day = itinerary!!.days[selectedDayTab]
+                                day = itinerary!!.days[selectedDayTab],
+                                onDeleteSlot = { slot ->
+                                    // TimeSlot 삭제
+                                    itinerary!!.days[selectedDayTab].timeSlots.remove(slot)
+                                    // UI 업데이트를 위해 itinerary를 재할당
+                                    itinerary = itinerary?.copy(days = itinerary!!.days)
+                                }
                             )
                         }
                     }
@@ -154,7 +160,10 @@ private fun ErrorView() {
 }
 
 @Composable
-private fun DayScheduleView(day: DaySchedule) {
+private fun DayScheduleView(
+    day: DaySchedule,
+    onDeleteSlot: (TimeSlot) -> Unit
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -186,12 +195,7 @@ private fun DayScheduleView(day: DaySchedule) {
         items(day.timeSlots) { slot ->
             TimeSlotCard(
                 slot = slot,
-                onDelete = {
-                    // TimeSlot 삭제
-                    day.timeSlots.remove(slot)
-                    // UI 업데이트를 위해 itinerary를 재할당
-                    itinerary = itinerary?.copy(days = itinerary!!.days)
-                }
+                onDelete = { onDeleteSlot(slot) }
             )
         }
     }

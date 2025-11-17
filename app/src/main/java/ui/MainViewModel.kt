@@ -92,11 +92,11 @@ class MainViewModel(
                 val finalPlaces = if (f0.mandatoryPlace.isNotBlank()) {
                     Log.d(TAG, "Searching mandatory place: ${f0.mandatoryPlace}")
                     try {
-                        val mandatoryResults = KakaoLocalService.searchKeyword(
-                            query = f0.mandatoryPlace,
-                            x = lng,
-                            y = lat,
-                            radius = 20000,
+                        val mandatoryResults = KakaoLocalService.searchByKeyword(
+                            centerLat = lat,
+                            centerLng = lng,
+                            keyword = f0.mandatoryPlace,
+                            radiusMeters = 20000,
                             size = 1
                         )
                         if (mandatoryResults.isNotEmpty()) {
