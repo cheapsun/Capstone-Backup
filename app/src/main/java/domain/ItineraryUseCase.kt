@@ -109,10 +109,11 @@ $placesText
    - 하루에 8-12개 장소 포함 목표 (식사 포함)
    - 필요시 오전을 08:30부터, 야간을 22:30까지 활용
 
-4. **필수 식사**:
+4. **식사 시간 배치**:
    - 점심: 12:00-13:30 (60-90분)
    - 저녁: 18:00-19:30 (60-90분)
-   - FOOD 카테고리 장소가 있으면 우선 배치, 없으면 "MEAL" 활동
+   - FOOD 카테고리 장소가 있으면 해당 시간대에 배치
+   - **중요**: FOOD 장소가 없으면 식사 시간을 비워두세요 (다른 활동으로 채우기)
 
 5. **Day별 균등 배치**:
    - ${days}일이면 각 날마다 약 ${(places.size.toDouble() / days).toInt()}-${(places.size.toDouble() / days + 2).toInt()}개 장소 배치
@@ -129,7 +130,7 @@ $placesText
         {"place_id": 2, "start_time": "11:10", "duration_min": 45, "activity": "VISIT"},
         {"place_id": 3, "start_time": "12:00", "duration_min": 60, "activity": "VISIT"},
         {"place_id": 4, "start_time": "13:10", "duration_min": 60, "activity": "VISIT"},
-        {"activity": "MEAL", "start_time": "18:00", "duration_min": 75}
+        {"place_id": 5, "start_time": "14:20", "duration_min": 45, "activity": "VISIT"}
       ]
     }
   ]
@@ -171,6 +172,11 @@ $placesText
                     val place = if (placeId >= 0 && placeId < places.size) {
                         places[placeId]
                     } else null
+
+                    // autoAddMeals가 false일 때 MEAL 활동 건너뛰기
+                    if (activity == "MEAL" && !autoAddMeals) {
+                        continue
+                    }
 
                     val endTime = calculateEndTime(startTime, durationMin)
 

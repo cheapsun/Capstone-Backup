@@ -294,7 +294,7 @@ private fun ItineraryCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "${itinerary.days.size}일 여행 일정",
+                    itinerary.name.ifBlank { "${itinerary.days.size}일 여행 일정" },
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
