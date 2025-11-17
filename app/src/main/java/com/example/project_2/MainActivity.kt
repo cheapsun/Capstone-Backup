@@ -100,6 +100,7 @@ class MainActivity : ComponentActivity() {
                                     rec = rec,
                                     regionHint = regionHint,
                                     onNavigateToItinerary = { selectedPlaces ->
+                                        mainVm.setSelectedPlacesForItinerary(selectedPlaces)
                                         navController.navigate("itinerary")
                                     }
                                 )
@@ -115,11 +116,11 @@ class MainActivity : ComponentActivity() {
 
                         composable("itinerary") {
                             val uiState by mainVm.ui.collectAsState()
-                            val recResult = uiState.lastResult
+                            val selectedPlaces = uiState.selectedPlacesForItinerary
 
-                            recResult?.let { rec ->
+                            if (selectedPlaces.isNotEmpty()) {
                                 com.example.project_2.ui.itinerary.ItineraryScreen(
-                                    selectedPlaces = rec.places,
+                                    selectedPlaces = selectedPlaces,
                                     filter = uiState.filter,
                                     onBack = {
                                         navController.popBackStack()
@@ -132,6 +133,11 @@ class MainActivity : ComponentActivity() {
                                         navController.navigate(Screen.Route.route)
                                     }
                                 )
+                            } else {
+                                // 선택된 장소가 없으면 지도 화면으로
+                                LaunchedEffect(Unit) {
+                                    navController.popBackStack()
+                                }
                             }
                         }
 

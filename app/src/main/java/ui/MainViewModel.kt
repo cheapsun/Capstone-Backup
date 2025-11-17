@@ -22,7 +22,9 @@ data class MainUiState(
     val lastResult: RecommendationResult? = null,
     // 자동완성 관련
     val autocompleteSuggestions: List<KakaoLocalService.AutocompleteResult> = emptyList(),
-    val showAutocomplete: Boolean = false
+    val showAutocomplete: Boolean = false,
+    // 일정 생성용 선택된 장소
+    val selectedPlacesForItinerary: List<Place> = emptyList()
 )
 
 class MainViewModel(
@@ -212,6 +214,11 @@ class MainViewModel(
     fun setMandatoryPlace(text: String) {
         Log.d(TAG, "setMandatoryPlace: $text")
         _ui.update { it.copy(filter = it.filter.copy(mandatoryPlace = text)) }
+    }
+
+    fun setSelectedPlacesForItinerary(places: List<Place>) {
+        Log.d(TAG, "setSelectedPlacesForItinerary: ${places.size} places")
+        _ui.update { it.copy(selectedPlacesForItinerary = places) }
     }
 
     fun consumeResult() {
