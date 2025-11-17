@@ -134,7 +134,13 @@ class MainActivity : ComponentActivity() {
                                         // TODO: Day별 지도 화면 구현
                                     },
                                     onSaveItinerary = { itinerary ->
-                                        // TODO: 일정 저장 구현
+                                        val storage = com.example.project_2.data.ItineraryStorage.getInstance(applicationContext)
+                                        storage.saveItinerary(itinerary)
+                                        android.widget.Toast.makeText(
+                                            applicationContext,
+                                            "일정이 저장되었습니다",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
                                         navController.navigate(Screen.Route.route)
                                     }
                                 )
@@ -148,8 +154,13 @@ class MainActivity : ComponentActivity() {
 
                         composable(Screen.Route.route) {
                             RouteListScreen(
-                                onRouteClick = { routeId ->
-                                    navController.navigate("route_detail/$routeId")
+                                onRouteClick = { routeIdOrPath ->
+                                    // Check if it's an itinerary path or a route ID
+                                    if (routeIdOrPath.startsWith("itinerary/")) {
+                                        navController.navigate("saved_$routeIdOrPath")
+                                    } else {
+                                        navController.navigate("route_detail/$routeIdOrPath")
+                                    }
                                 }
                             )
                         }
@@ -174,6 +185,19 @@ class MainActivity : ComponentActivity() {
                                 routeId = routeId,
                                 onBackClick = {
                                     navController.popBackStack()
+                                }
+                            )
+                        }
+
+                        composable("saved_itinerary/{itineraryId}") { backStackEntry ->
+                            val itineraryId = backStackEntry.arguments?.getString("itineraryId") ?: return@composable
+                            com.example.project_2.ui.itinerary.SavedItineraryScreen(
+                                itineraryId = itineraryId,
+                                onBack = {
+                                    navController.popBackStack()
+                                },
+                                onNavigateToMap = { itinerary ->
+                                    // TODO: Day별 지도 화면 구현
                                 }
                             )
                         }

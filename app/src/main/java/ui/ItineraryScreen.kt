@@ -3,9 +3,11 @@ package com.example.project_2.ui.itinerary
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Save
@@ -18,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.example.project_2.domain.ItineraryUseCase
 import com.example.project_2.domain.model.*
 import kotlinx.coroutines.launch
+import org.burnoutcrew.reorderable.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +35,7 @@ fun ItineraryScreen(
     var itinerary by remember { mutableStateOf<Itinerary?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedDayTab by remember { mutableStateOf(0) }
+    var isEditMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // 일정 생성
@@ -52,8 +56,14 @@ fun ItineraryScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* TODO: 편집 모드 */ }) {
-                        Icon(Icons.Default.Edit, "편집")
+                    if (isEditMode) {
+                        IconButton(onClick = { isEditMode = false }) {
+                            Icon(Icons.Default.Save, "완료")
+                        }
+                    } else {
+                        IconButton(onClick = { isEditMode = true }) {
+                            Icon(Icons.Default.Edit, "편집")
+                        }
                     }
                 }
             )
@@ -115,9 +125,18 @@ fun ItineraryScreen(
                         if (selectedDayTab < itinerary!!.days.size) {
                             DayScheduleView(
                                 day = itinerary!!.days[selectedDayTab],
+                                isEditMode = isEditMode,
                                 onDeleteSlot = { slot ->
                                     // TimeSlot 삭제
                                     itinerary!!.days[selectedDayTab].timeSlots.remove(slot)
+                                    // UI 업데이트를 위해 itinerary를 재할당
+                                    itinerary = itinerary?.copy(days = itinerary!!.days)
+                                },
+                                onReorder = { from, to ->
+                                    // TimeSlot 순서 변경
+                                    val slots = itinerary!!.days[selectedDayTab].timeSlots
+                                    val item = slots.removeAt(from)
+                                    slots.add(to, item)
                                     // UI 업데이트를 위해 itinerary를 재할당
                                     itinerary = itinerary?.copy(days = itinerary!!.days)
                                 }
@@ -162,15 +181,29 @@ private fun ErrorView() {
 @Composable
 private fun DayScheduleView(
     day: DaySchedule,
-    onDeleteSlot: (TimeSlot) -> Unit
+    isEditMode: Boolean,
+    onDeleteSlot: (TimeSlot) -> Unit,
+    onReorder: (Int, Int) -> Unit
 ) {
+    val reorderableState = rememberReorderableLazyListState(
+        onMove = { from, to ->
+            // Subtract 1 because first item is header
+            if (from.index > 0 && to.index > 0) {
+                onReorder(from.index - 1, to.index - 1)
+            }
+        }
+    )
+
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        state = reorderableState.listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .reorderable(reorderableState),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // 헤더
-        item {
+        item(key = "header") {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -178,25 +211,45 @@ private fun DayScheduleView(
                 )
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Day ${day.day}",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "${day.timeSlots.size}개 일정",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "Day ${day.day}",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "${day.timeSlots.size}개 일정",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        if (isEditMode) {
+                            Text(
+                                "드래그하여 순서 변경",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
                 }
             }
         }
 
         // 시간대별 일정
-        items(day.timeSlots) { slot ->
-            TimeSlotCard(
-                slot = slot,
-                onDelete = { onDeleteSlot(slot) }
-            )
+        itemsIndexed(day.timeSlots, key = { _, slot -> slot.id }) { index, slot ->
+            ReorderableItem(reorderableState, key = slot.id) { isDragging ->
+                TimeSlotCard(
+                    slot = slot,
+                    isEditMode = isEditMode,
+                    isDragging = isDragging,
+                    reorderableState = reorderableState,
+                    onDelete = { onDeleteSlot(slot) }
+                )
+            }
         }
     }
 }
@@ -204,17 +257,41 @@ private fun DayScheduleView(
 @Composable
 private fun TimeSlotCard(
     slot: TimeSlot,
+    isEditMode: Boolean = false,
+    isDragging: Boolean = false,
+    reorderableState: ReorderableLazyListState? = null,
     onDelete: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isDragging) 8.dp else 2.dp
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDragging) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        )
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 드래그 핸들 (편집 모드일 때만)
+            if (isEditMode && reorderableState != null) {
+                Icon(
+                    imageVector = Icons.Default.DragHandle,
+                    contentDescription = "드래그",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .detectReorderAfterLongPress(reorderableState)
+                )
+            }
+
             // 시간
             Column(
                 modifier = Modifier.width(70.dp),
@@ -280,13 +357,15 @@ private fun TimeSlotCard(
                 }
             }
 
-            // 삭제 버튼
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "삭제",
-                    tint = MaterialTheme.colorScheme.error
-                )
+            // 삭제 버튼 (편집 모드일 때만)
+            if (isEditMode) {
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "삭제",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }
