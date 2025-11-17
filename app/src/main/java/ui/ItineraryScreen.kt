@@ -281,10 +281,10 @@ private fun TimeSlotCard(slot: TimeSlot) {
                 }
 
                 // 이동 정보
-                if (slot.travelInfo != null) {
+                slot.travelInfo?.let { travel ->
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "🚶 다음까지: ${slot.travelInfo.distance}km, ${slot.travelInfo.duration}분",
+                        "🚶 다음까지: ${travel.distance}km, ${travel.duration}분",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
