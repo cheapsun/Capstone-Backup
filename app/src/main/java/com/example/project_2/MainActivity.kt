@@ -131,7 +131,8 @@ class MainActivity : ComponentActivity() {
                                         navController.popBackStack()
                                     },
                                     onNavigateToMap = { itinerary ->
-                                        // TODO: Day별 지도 화면 구현
+                                        mainVm.setCurrentItineraryForMap(itinerary)
+                                        navController.navigate("itinerary_map")
                                     },
                                     onSaveItinerary = { itinerary ->
                                         val storage = com.example.project_2.data.ItineraryStorage.getInstance(applicationContext)
@@ -197,9 +198,28 @@ class MainActivity : ComponentActivity() {
                                     navController.popBackStack()
                                 },
                                 onNavigateToMap = { itinerary ->
-                                    // TODO: Day별 지도 화면 구현
+                                    mainVm.setCurrentItineraryForMap(itinerary)
+                                    navController.navigate("itinerary_map")
                                 }
                             )
+                        }
+
+                        composable("itinerary_map") {
+                            val uiState by mainVm.ui.collectAsState()
+                            val itinerary = uiState.currentItineraryForMap
+
+                            if (itinerary != null) {
+                                com.example.project_2.ui.itinerary.ItineraryMapScreen(
+                                    itinerary = itinerary,
+                                    onBack = {
+                                        navController.popBackStack()
+                                    }
+                                )
+                            } else {
+                                LaunchedEffect(Unit) {
+                                    navController.popBackStack()
+                                }
+                            }
                         }
                     }
                 }

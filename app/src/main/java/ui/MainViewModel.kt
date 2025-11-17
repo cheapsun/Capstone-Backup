@@ -26,7 +26,9 @@ data class MainUiState(
     // 일정 생성용 선택된 장소
     val selectedPlacesForItinerary: List<Place> = emptyList(),
     // 식사 시간 자동 추가 여부
-    val autoAddMeals: Boolean = false
+    val autoAddMeals: Boolean = false,
+    // 지도에 표시할 일정
+    val currentItineraryForMap: Itinerary? = null
 )
 
 class MainViewModel(
@@ -249,6 +251,11 @@ class MainViewModel(
     fun setAutoAddMeals(autoAdd: Boolean) {
         Log.d(TAG, "setAutoAddMeals: $autoAdd")
         _ui.update { it.copy(autoAddMeals = autoAdd) }
+    }
+
+    fun setCurrentItineraryForMap(itinerary: Itinerary) {
+        Log.d(TAG, "setCurrentItineraryForMap: ${itinerary.days.size} days")
+        _ui.update { it.copy(currentItineraryForMap = itinerary) }
     }
 
     fun consumeResult() {
