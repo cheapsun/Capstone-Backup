@@ -99,7 +99,10 @@ fun RouteListScreen(
                             "저장된 루트",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(vertical = 8.dp, top = if (itineraries.isNotEmpty()) 16.dp else 0.dp)
+                            modifier = Modifier.padding(
+                                top = if (itineraries.isNotEmpty()) 16.dp else 8.dp,
+                                bottom = 8.dp
+                            )
                         )
                     }
                     items(routes, key = { it.id }) { route ->

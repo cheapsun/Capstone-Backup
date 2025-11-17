@@ -1,5 +1,9 @@
 package com.example.project_2.ui.itinerary
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -182,18 +186,24 @@ private fun updateMapMarkers(
     // Add markers for each place
     val validPlaces = places.filter { it.lat != null && it.lng != null }
 
+    // Default color for markers
+    val defaultColor = "#FF5722"  // Red-orange color
+
     validPlaces.forEachIndexed { index, place ->
         val position = LatLng.from(place.lat!!, place.lng!!)
 
+        // Create numbered bitmap
+        val numberedBitmap = createNumberedMarkerBitmap(
+            number = index + 1,
+            color = defaultColor
+        )
+
         val styles = LabelStyles.from(
-            LabelStyle.from(android.graphics.Color.RED)
-                .setTextSize(30)
-                .setIconTransition(LabelStyle.IconTransition.None)
+            LabelStyle.from(numberedBitmap).setApplyDpScale(false)
         )
 
         val options = LabelOptions.from(position)
             .setStyles(styles)
-            .setTexts("${index + 1}")
 
         map.labelManager?.layer?.addLabel(options)
     }
@@ -209,4 +219,48 @@ private fun updateMapMarkers(
         )
         map.moveCamera(cameraUpdate)
     }
+}
+
+/**
+ * Create a numbered marker bitmap
+ */
+private fun createNumberedMarkerBitmap(
+    number: Int,
+    color: String
+): Bitmap {
+    val baseSize = 60
+    val bitmap = Bitmap.createBitmap(baseSize, baseSize, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    // Draw circle background
+    paint.color = Color.parseColor(color)
+    canvas.drawCircle(
+        baseSize / 2f,
+        baseSize / 2f,
+        (baseSize / 2 - 2).toFloat(),
+        paint
+    )
+
+    // Draw white border
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 3f
+    paint.color = Color.WHITE
+    canvas.drawCircle(
+        baseSize / 2f,
+        baseSize / 2f,
+        (baseSize / 2 - 2).toFloat(),
+        paint
+    )
+
+    // Draw number text
+    paint.style = Paint.Style.FILL
+    paint.color = Color.WHITE
+    paint.textSize = (baseSize * 0.5f)
+    paint.textAlign = Paint.Align.CENTER
+    val textY = baseSize / 2f - (paint.descent() + paint.ascent()) / 2f
+    canvas.drawText(number.toString(), baseSize / 2f, textY, paint)
+
+    return bitmap
 }
