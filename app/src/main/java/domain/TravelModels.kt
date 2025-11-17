@@ -24,13 +24,11 @@ enum class Category {
 }
 
 enum class TripDuration {
-    HALF_DAY,
     DAY,
     ONE_NIGHT,
     TWO_NIGHTS;
 
     fun toDays(): Int = when (this) {
-        HALF_DAY -> 1
         DAY -> 1
         ONE_NIGHT -> 2
         TWO_NIGHTS -> 3
@@ -48,7 +46,6 @@ data class FilterState(
     val region: String = "",
     val categories: Set<Category> = emptySet(),
     val duration: TripDuration = TripDuration.DAY,
-    val budgetPerPerson: Int = 30000, // 원(1인)
     val companion: Companion = Companion.SOLO,
     val numberOfPeople: Int = 1,           // 인원수
     val mandatoryPlace: String = ""         // 필수 방문 장소 (선택)

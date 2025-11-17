@@ -55,7 +55,6 @@ class GptRerankUseCase(
         val cats = if (filter.categories.isEmpty()) "미지정"
         else filter.categories.joinToString(", ") { safeToText(it) }
 
-        val budget = "예산(1인): ${filter.budgetPerPerson}원"
         val companion = safeToText(filter.companion)
         val duration  = safeToText(filter.duration)
 
@@ -86,13 +85,12 @@ class GptRerankUseCase(
 - 선호 카테고리: $cats
 - 동행: $companion
 - 소요시간: $duration
-- $budget
 [날씨]
 $weatherText
 
 [평가 기준]
 - 현지인의 시선에서 '서울 여행 중 방문할 만한 특별한 장소'를 우선합니다.
-- 지역 고유성, 희소성, 리뷰 감성, 날씨 적합성(실내/실외), 동행/체류시간/예산 등을 종합 고려합니다.
+- 지역 고유성, 희소성, 리뷰 감성, 날씨 적합성(실내/실외), 동행/체류시간 등을 종합 고려합니다.
 $chainPenaltyRule
 - 같은 유형이 몰리면 다양성을 확보하세요.
 - reason은 한국어 한 문장(20~80자), 공백/기호만 금지.

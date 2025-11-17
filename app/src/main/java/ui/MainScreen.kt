@@ -130,48 +130,46 @@ fun MainScreen(
                 SectionCard(title = "여행 기간") {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        Text(
+                            "일정 생성 기준 일수를 선택하세요",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(modifier = Modifier.weight(1f)) {
-                                DurationChip("반나절", TripDuration.HALF_DAY, ui.filter.duration, vm::setDuration)
+                                DurationChipImproved(
+                                    dayCount = "1일",
+                                    label = "반나절/하루",
+                                    duration = TripDuration.DAY,
+                                    selected = ui.filter.duration,
+                                    onClick = vm::setDuration
+                                )
                             }
                             Box(modifier = Modifier.weight(1f)) {
-                                DurationChip("하루", TripDuration.DAY, ui.filter.duration, vm::setDuration)
+                                DurationChipImproved(
+                                    dayCount = "2일",
+                                    label = "1박2일",
+                                    duration = TripDuration.ONE_NIGHT,
+                                    selected = ui.filter.duration,
+                                    onClick = vm::setDuration
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                DurationChipImproved(
+                                    dayCount = "3일",
+                                    label = "2박3일",
+                                    duration = TripDuration.TWO_NIGHTS,
+                                    selected = ui.filter.duration,
+                                    onClick = vm::setDuration
+                                )
                             }
                         }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                DurationChip("1박2일", TripDuration.ONE_NIGHT, ui.filter.duration, vm::setDuration)
-                            }
-                            Box(modifier = Modifier.weight(1f)) {
-                                DurationChip("2박3일", TripDuration.TWO_NIGHTS, ui.filter.duration, vm::setDuration)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 예산
-            item {
-                SectionCard(title = "1인당 예산") {
-                    Text("₩${ui.filter.budgetPerPerson}", style = MaterialTheme.typography.titleMedium)
-                    Slider(
-                        value = ui.filter.budgetPerPerson.toFloat(),
-                        onValueChange = { vm.setBudget(it.toInt()) },
-                        valueRange = 10000f..100000f
-                    )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("₩10,000", style = MaterialTheme.typography.labelSmall)
-                        Text("₩100,000+", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -456,6 +454,37 @@ private fun DurationChip(
         selected = selected == value,
         onClick = { onSelect(value) },
         label = { Text(label) }
+    )
+}
+
+@Composable
+private fun DurationChipImproved(
+    dayCount: String,
+    label: String,
+    duration: TripDuration,
+    selected: TripDuration,
+    onClick: (TripDuration) -> Unit
+) {
+    FilterChip(
+        selected = selected == duration,
+        onClick = { onClick(duration) },
+        label = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    dayCount,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        },
+        modifier = Modifier.fillMaxWidth()
     )
 }
 

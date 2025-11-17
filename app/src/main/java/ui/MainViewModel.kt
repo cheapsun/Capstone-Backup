@@ -186,11 +186,6 @@ class MainViewModel(
         _ui.update { it.copy(filter = it.filter.copy(duration = duration)) }
     }
 
-    fun setBudget(budgetPerPerson: Int) {
-        Log.d(TAG, "setBudget: $budgetPerPerson")
-        _ui.update { it.copy(filter = it.filter.copy(budgetPerPerson = budgetPerPerson)) }
-    }
-
     fun setCompanion(companion: Companion) {
         Log.d(TAG, "setCompanion: $companion")
         _ui.update { it.copy(filter = it.filter.copy(companion = companion)) }

@@ -10,15 +10,13 @@ import java.util.UUID
 data class Itinerary(
     val id: String = UUID.randomUUID().toString(),
     val days: List<DaySchedule>,
-    val totalCost: Int = 0,
     val createdAt: Long = System.currentTimeMillis()
 )
 
 /** 하루 일정 */
 data class DaySchedule(
     val day: Int,                           // 1, 2, 3
-    val timeSlots: MutableList<TimeSlot>,   // 시간대별 일정
-    val estimatedCost: Int = 0              // 예상 비용
+    val timeSlots: MutableList<TimeSlot>    // 시간대별 일정
 )
 
 /** 시간대 */

@@ -47,10 +47,7 @@ class ItineraryUseCase(
         // GPT 응답 파싱
         val daySchedules = parseGptResponse(gptResponse, selectedPlaces, days)
 
-        return Itinerary(
-            days = daySchedules,
-            totalCost = daySchedules.sumOf { it.estimatedCost }
-        )
+        return Itinerary(days = daySchedules)
     }
 
     private fun buildItineraryPrompt(
@@ -75,19 +72,36 @@ $placesText
 
 [조건]
 - 총 ${days}일 일정
-- 인원: ${filter.numberOfPeople}명
-- 예산: 1인당 ${filter.budgetPerPerson}원$mandatoryText
+- 인원: ${filter.numberOfPeople}명$mandatoryText
 
-[요구사항]
-1. Day별로 균등하게 장소 배치 (Day당 ${places.size / days}~${(places.size / days) + 2}개)
-2. 각 장소마다 시간 배정 (09:00부터 시작)
-3. 점심(12:00), 저녁(19:00) 식사 시간 자동 삽입
-4. 같은 지역 장소끼리 묶어서 배치
-5. 각 장소 체류 시간:
-   - 관광/사진: 2시간
-   - 맛집: 1.5시간
-   - 카페: 1시간
-   - 문화: 2.5시간
+[중요 규칙]
+1. 시간대별 활동 배치:
+   - 09:00-12:00 (오전): 관광지, 사진 명소, 문화 시설, 체험 활동
+   - 12:00-13:30 (점심): FOOD 카테고리 장소 또는 "MEAL" 활동 (반드시 포함)
+   - 13:30-17:00 (오후): 관광지, 카페, 쇼핑
+   - 18:00-19:30 (저녁): FOOD 카테고리 장소 또는 "MEAL" 활동 (반드시 포함)
+   - 19:30-22:00 (야간): 나이트 명소, 야경
+
+2. 카테고리별 배치 규칙:
+   - FOOD: 점심(12:00) 또는 저녁(18:00) 시간대에만 배치
+   - CAFE: 오후(14:00-17:00) 시간대에 배치
+   - PHOTO, CULTURE, HEALING, EXPERIENCE: 오전/오후 시간대 배치
+   - NIGHT: 저녁(19:30 이후) 시간대에 배치
+
+3. 필수 식사 시간:
+   - 점심: 12:00 (90분)
+   - 저녁: 18:00 (90분)
+   - FOOD 카테고리 장소가 있으면 해당 시간대에 배치, 없으면 "MEAL" 활동으로 삽입
+
+4. 체류 시간:
+   - FOOD: 90분
+   - CAFE: 60분
+   - PHOTO, HEALING: 90분
+   - CULTURE, EXPERIENCE: 120분
+   - NIGHT: 90분
+   - SHOPPING: 90분
+
+5. Day별로 장소를 균등하게 배치하되, 위 시간대 규칙을 준수
 
 출력 형식 (JSON):
 {
@@ -96,12 +110,15 @@ $placesText
       "day": 1,
       "slots": [
         {"place_id": 0, "start_time": "09:00", "duration_min": 120, "activity": "VISIT"},
-        {"activity": "MEAL", "start_time": "12:00", "duration_min": 90},
-        {"place_id": 1, "start_time": "14:00", "duration_min": 60, "activity": "VISIT"}
+        {"place_id": 2, "start_time": "12:00", "duration_min": 90, "activity": "VISIT"},
+        {"activity": "MEAL", "start_time": "18:00", "duration_min": 90}
       ]
     }
   ]
 }
+
+주의: place_id는 FOOD/CAFE 등 해당 카테고리 장소가 있을 때만 사용하고,
+      장소가 없으면 "activity": "MEAL"로 식사 시간만 표시하세요.
 """.trimIndent()
     }
 
@@ -117,7 +134,9 @@ $placesText
 
             val schedules = mutableListOf<DaySchedule>()
 
-            for (i in 0 until daysArray.length()) {
+            // Only parse up to the requested number of days
+            val maxDays = minOf(daysArray.length(), days)
+            for (i in 0 until maxDays) {
                 val dayObj = daysArray.getJSONObject(i)
                 val dayNum = dayObj.getInt("day")
                 val slotsArray = dayObj.getJSONArray("slots")
@@ -167,61 +186,137 @@ $placesText
         places: List<Place>,
         days: Int
     ): Itinerary {
-        Log.d(TAG, "Using fallback itinerary generation")
+        Log.d(TAG, "Using fallback itinerary generation for $days days with ${places.size} places")
 
-        val placesPerDay = places.chunked((places.size + days - 1) / days)
+        // Separate places by category
+        val foodPlaces = places.filter { it.category == Category.FOOD }
+        val cafePlaces = places.filter { it.category == Category.CAFE }
+        val nightPlaces = places.filter { it.category == Category.NIGHT }
+        val stayPlaces = places.filter { it.category == Category.STAY }
+        val otherPlaces = places.filter {
+            it.category !in setOf(Category.FOOD, Category.CAFE, Category.NIGHT, Category.STAY)
+        }
 
-        val schedules = placesPerDay.mapIndexed { dayIndex, dayPlaces ->
-            var currentTime = LocalTime.of(9, 0)
+        Log.d(TAG, "Category distribution: FOOD=${foodPlaces.size}, CAFE=${cafePlaces.size}, " +
+                "NIGHT=${nightPlaces.size}, STAY=${stayPlaces.size}, OTHER=${otherPlaces.size}")
+
+        val schedules = mutableListOf<DaySchedule>()
+
+        // Distribute places across days
+        val otherPerDay = (otherPlaces.size + days - 1) / days
+        val cafePerDay = (cafePlaces.size + days - 1) / days
+        val nightPerDay = (nightPlaces.size + days - 1) / days
+
+        for (dayIndex in 0 until days) {
             val slots = mutableListOf<TimeSlot>()
+            var currentTime = LocalTime.of(9, 0)
 
-            dayPlaces.forEachIndexed { idx, place ->
-                // 점심 시간 추가
-                if (currentTime.hour >= 12 && currentTime.hour < 13 && idx > 0) {
-                    slots.add(
-                        TimeSlot(
-                            startTime = "12:00",
-                            endTime = "13:30",
-                            place = null,
-                            activity = "MEAL",
-                            duration = 90
-                        )
-                    )
-                    currentTime = LocalTime.of(13, 30)
-                }
+            // Morning slot: Other activities (관광, 문화, 체험 등)
+            val otherStart = dayIndex * otherPerDay
+            val otherEnd = minOf(otherStart + (otherPerDay / 2).coerceAtLeast(1), otherPlaces.size)
+            val morningPlaces = if (otherStart < otherPlaces.size) {
+                otherPlaces.subList(otherStart, otherEnd)
+            } else emptyList()
 
-                val duration = when (place.category) {
-                    Category.FOOD -> 90
-                    Category.CAFE -> 60
-                    Category.CULTURE -> 150
-                    else -> 120
-                }
-
-                val startTime = currentTime.toString()
-                currentTime = currentTime.plusMinutes(duration.toLong())
-                val endTime = currentTime.toString()
-
-                slots.add(
-                    TimeSlot(
-                        startTime = startTime,
-                        endTime = endTime,
-                        place = place,
-                        activity = "VISIT",
-                        duration = duration
-                    )
-                )
-
-                // 30분 이동 시간
-                currentTime = currentTime.plusMinutes(30)
+            morningPlaces.forEach { place ->
+                val duration = getDurationForCategory(place.category)
+                slots.add(createTimeSlot(place, currentTime, duration))
+                currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(20) // 20분 이동
             }
 
-            DaySchedule(
-                day = dayIndex + 1,
-                timeSlots = slots
-            )
+            // Lunch at 12:00
+            currentTime = LocalTime.of(12, 0)
+            val lunchPlace = foodPlaces.getOrNull(dayIndex * 2)
+            if (lunchPlace != null) {
+                slots.add(createTimeSlot(lunchPlace, currentTime, 90))
+            } else {
+                slots.add(createMealSlot(currentTime, 90))
+            }
+            currentTime = LocalTime.of(13, 30)
+
+            // Afternoon: Remaining other activities + cafes
+            val afternoonOtherStart = otherEnd
+            val afternoonOtherEnd = minOf(otherStart + otherPerDay, otherPlaces.size)
+            val afternoonPlaces = if (afternoonOtherStart < otherPlaces.size) {
+                otherPlaces.subList(afternoonOtherStart, afternoonOtherEnd)
+            } else emptyList()
+
+            afternoonPlaces.forEach { place ->
+                val duration = getDurationForCategory(place.category)
+                slots.add(createTimeSlot(place, currentTime, duration))
+                currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(20)
+            }
+
+            // Cafe time (14:00-17:00)
+            val cafeStart = dayIndex * cafePerDay
+            val cafeEnd = minOf(cafeStart + cafePerDay, cafePlaces.size)
+            val dayCafes = if (cafeStart < cafePlaces.size) {
+                cafePlaces.subList(cafeStart, cafeEnd)
+            } else emptyList()
+
+            dayCafes.forEach { cafe ->
+                if (currentTime.hour < 17) {
+                    currentTime = maxOf(currentTime, LocalTime.of(14, 0))
+                    slots.add(createTimeSlot(cafe, currentTime, 60))
+                    currentTime = currentTime.plusMinutes(60).plusMinutes(15)
+                }
+            }
+
+            // Dinner at 18:00
+            currentTime = LocalTime.of(18, 0)
+            val dinnerPlace = foodPlaces.getOrNull(dayIndex * 2 + 1)
+            if (dinnerPlace != null) {
+                slots.add(createTimeSlot(dinnerPlace, currentTime, 90))
+            } else {
+                slots.add(createMealSlot(currentTime, 90))
+            }
+            currentTime = LocalTime.of(19, 30)
+
+            // Evening: Night spots
+            val nightStart = dayIndex * nightPerDay
+            val nightEnd = minOf(nightStart + nightPerDay, nightPlaces.size)
+            val nightSpots = if (nightStart < nightPlaces.size) {
+                nightPlaces.subList(nightStart, nightEnd)
+            } else emptyList()
+
+            nightSpots.forEach { night ->
+                slots.add(createTimeSlot(night, currentTime, 90))
+                currentTime = currentTime.plusMinutes(90).plusMinutes(15)
+            }
+
+            schedules.add(DaySchedule(day = dayIndex + 1, timeSlots = slots))
         }
 
         return Itinerary(days = schedules)
+    }
+
+    private fun getDurationForCategory(category: Category): Int = when (category) {
+        Category.FOOD -> 90
+        Category.CAFE -> 60
+        Category.CULTURE, Category.EXPERIENCE -> 120
+        Category.PHOTO, Category.HEALING, Category.SHOPPING -> 90
+        Category.NIGHT -> 90
+        Category.STAY -> 0
+    }
+
+    private fun createTimeSlot(place: Place, startTime: LocalTime, durationMin: Int): TimeSlot {
+        return TimeSlot(
+            startTime = startTime.toString(),
+            endTime = startTime.plusMinutes(durationMin.toLong()).toString(),
+            place = place,
+            activity = "VISIT",
+            duration = durationMin
+        )
+    }
+
+    private fun createMealSlot(startTime: LocalTime, durationMin: Int): TimeSlot {
+        return TimeSlot(
+            startTime = startTime.toString(),
+            endTime = startTime.plusMinutes(durationMin.toLong()).toString(),
+            place = null,
+            activity = "MEAL",
+            duration = durationMin
+        )
     }
 
     private fun sanitizeJson(raw: String): String {
