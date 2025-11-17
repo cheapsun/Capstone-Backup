@@ -2,10 +2,11 @@ package com.example.project_2.ui.itinerary
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Save
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.example.project_2.data.ItineraryStorage
 import com.example.project_2.domain.model.*
 import android.widget.Toast
+import org.burnoutcrew.reorderable.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -130,13 +132,26 @@ private fun DayScheduleView(
     day: DaySchedule,
     onDeleteSlot: ((TimeSlot) -> Unit)?
 ) {
+    val isEditMode = onDeleteSlot != null
+
+    val reorderableState = rememberReorderableLazyListState(
+        onMove = { from, to ->
+            // Reordering is handled in parent if needed
+        }
+    )
+
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        state = if (isEditMode) reorderableState.listState else rememberLazyListState(),
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (isEditMode) Modifier.reorderable(reorderableState) else Modifier
+            ),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // 헤더
-        item {
+        item(key = "header") {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -144,25 +159,57 @@ private fun DayScheduleView(
                 )
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Day ${day.day}",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "${day.timeSlots.size}개 일정",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "Day ${day.day}",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "${day.timeSlots.size}개 일정",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        if (isEditMode) {
+                            Text(
+                                "드래그하여 순서 변경",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
                 }
             }
         }
 
         // 시간대별 일정
-        items(day.timeSlots) { slot ->
-            TimeSlotCard(
-                slot = slot,
-                onDelete = onDeleteSlot?.let { { it(slot) } }
-            )
+        if (isEditMode) {
+            itemsIndexed(day.timeSlots, key = { _, slot -> slot.id }) { index, slot ->
+                ReorderableItem(reorderableState, key = slot.id) { isDragging ->
+                    TimeSlotCard(
+                        slot = slot,
+                        isEditMode = true,
+                        isDragging = isDragging,
+                        reorderableState = reorderableState,
+                        onDelete = onDeleteSlot?.let { { it(slot) } }
+                    )
+                }
+            }
+        } else {
+            itemsIndexed(day.timeSlots, key = { _, slot -> slot.id }) { index, slot ->
+                TimeSlotCard(
+                    slot = slot,
+                    isEditMode = false,
+                    isDragging = false,
+                    reorderableState = null,
+                    onDelete = null
+                )
+            }
         }
     }
 }
@@ -170,17 +217,41 @@ private fun DayScheduleView(
 @Composable
 private fun TimeSlotCard(
     slot: TimeSlot,
+    isEditMode: Boolean = false,
+    isDragging: Boolean = false,
+    reorderableState: ReorderableLazyListState? = null,
     onDelete: (() -> Unit)?
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isDragging) 8.dp else 2.dp
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDragging) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        )
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 드래그 핸들 (편집 모드일 때만)
+            if (isEditMode && reorderableState != null) {
+                Icon(
+                    imageVector = Icons.Default.DragHandle,
+                    contentDescription = "드래그",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .detectReorderAfterLongPress(reorderableState)
+                )
+            }
+
             // 시간
             Column(
                 modifier = Modifier.width(70.dp),
