@@ -110,18 +110,36 @@ fun SavedItineraryScreen(
                         day = itinerary!!.days[selectedDayTab],
                         isEditMode = isEditMode,
                         onDeleteSlot = { slot ->
-                            // TimeSlot 삭제
-                            itinerary!!.days[selectedDayTab].timeSlots.remove(slot)
-                            // UI 업데이트를 위해 itinerary를 재할당
-                            itinerary = itinerary?.copy(days = itinerary!!.days)
+                            // TimeSlot 삭제 - 새로운 리스트 생성하여 참조 변경
+                            itinerary = itinerary?.copy(
+                                days = itinerary!!.days.mapIndexed { index, day ->
+                                    if (index == selectedDayTab) {
+                                        day.copy(
+                                            timeSlots = day.timeSlots.toMutableList().apply {
+                                                remove(slot)
+                                            }
+                                        )
+                                    } else {
+                                        day
+                                    }
+                                }
+                            )
                         },
                         onReorder = { from, to ->
-                            // TimeSlot 순서 변경
-                            val slots = itinerary!!.days[selectedDayTab].timeSlots
-                            val item = slots.removeAt(from)
-                            slots.add(to, item)
-                            // UI 업데이트를 위해 itinerary를 재할당
-                            itinerary = itinerary?.copy(days = itinerary!!.days)
+                            // TimeSlot 순서 변경 - 새로운 리스트 생성하여 참조 변경
+                            itinerary = itinerary?.copy(
+                                days = itinerary!!.days.mapIndexed { index, day ->
+                                    if (index == selectedDayTab) {
+                                        day.copy(
+                                            timeSlots = day.timeSlots.toMutableList().apply {
+                                                add(to, removeAt(from))
+                                            }
+                                        )
+                                    } else {
+                                        day
+                                    }
+                                }
+                            )
                         }
                     )
                 }
