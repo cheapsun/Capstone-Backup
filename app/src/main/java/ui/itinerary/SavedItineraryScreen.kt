@@ -240,7 +240,7 @@ private fun TimeSlotCard(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .size(24.dp)
-                        .detectReorderAfterLongPress(reorderableState)
+                        .detectReorder(reorderableState)
                 )
             }
 
