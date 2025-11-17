@@ -194,6 +194,26 @@ class MainViewModel(
         _ui.update { it.copy(filter = it.filter.copy(companion = companion)) }
     }
 
+    fun setNumberOfPeople(n: Int) {
+        Log.d(TAG, "setNumberOfPeople: $n")
+        _ui.update { it.copy(filter = it.filter.copy(numberOfPeople = n.coerceIn(1, 10))) }
+    }
+
+    fun increasePeople() {
+        val current = _ui.value.filter.numberOfPeople
+        setNumberOfPeople(current + 1)
+    }
+
+    fun decreasePeople() {
+        val current = _ui.value.filter.numberOfPeople
+        setNumberOfPeople(current - 1)
+    }
+
+    fun setMandatoryPlace(text: String) {
+        Log.d(TAG, "setMandatoryPlace: $text")
+        _ui.update { it.copy(filter = it.filter.copy(mandatoryPlace = text)) }
+    }
+
     fun consumeResult() {
         Log.d(TAG, "consumeResult (결과 초기화)")
         _ui.update { it.copy(lastResult = null) }

@@ -96,7 +96,13 @@ class MainActivity : ComponentActivity() {
 
                             recResult?.let { rec ->
                                 val regionHint = uiState.filter.region.ifBlank { null }
-                                ResultScreen(rec, regionHint)
+                                ResultScreen(
+                                    rec = rec,
+                                    regionHint = regionHint,
+                                    onNavigateToItinerary = { selectedPlaces ->
+                                        navController.navigate("itinerary")
+                                    }
+                                )
                             } ?: run {
                                 // 추천 결과가 없을 때는 검색 화면으로 유도
                                 LaunchedEffect(Unit) {
@@ -104,6 +110,28 @@ class MainActivity : ComponentActivity() {
                                         popUpTo(Screen.Search.route) { inclusive = true }
                                     }
                                 }
+                            }
+                        }
+
+                        composable("itinerary") {
+                            val uiState by mainVm.ui.collectAsState()
+                            val recResult = uiState.lastResult
+
+                            recResult?.let { rec ->
+                                com.example.project_2.ui.itinerary.ItineraryScreen(
+                                    selectedPlaces = rec.places,
+                                    filter = uiState.filter,
+                                    onBack = {
+                                        navController.popBackStack()
+                                    },
+                                    onNavigateToMap = { itinerary ->
+                                        // TODO: Day별 지도 화면 구현
+                                    },
+                                    onSaveItinerary = { itinerary ->
+                                        // TODO: 일정 저장 구현
+                                        navController.navigate(Screen.Route.route)
+                                    }
+                                )
                             }
                         }
 

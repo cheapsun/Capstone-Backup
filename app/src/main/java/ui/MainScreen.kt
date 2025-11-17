@@ -11,8 +11,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -202,6 +205,63 @@ fun MainScreen(
                                 CompanionChip("👪 가족", Companion.FAMILY, ui.filter.companion, vm::setCompanion)
                             }
                         }
+                    }
+                }
+            }
+
+            // 인원수
+            item {
+                SectionCard(title = "몇 명이서 가나요?") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "${ui.filter.numberOfPeople}명",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilledTonalIconButton(
+                                onClick = { vm.decreasePeople() },
+                                enabled = ui.filter.numberOfPeople > 1
+                            ) {
+                                Icon(Icons.Default.Remove, "인원 감소")
+                            }
+
+                            Text(
+                                "${ui.filter.numberOfPeople}",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+
+                            FilledTonalIconButton(
+                                onClick = { vm.increasePeople() },
+                                enabled = ui.filter.numberOfPeople < 10
+                            ) {
+                                Icon(Icons.Default.Add, "인원 증가")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 필수 방문 장소 (선택)
+            item {
+                SectionCard(title = "꼭 가고 싶은 장소 (선택)") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = ui.filter.mandatoryPlace,
+                            onValueChange = vm::setMandatoryPlace,
+                            placeholder = { Text("예: 해운대, 광안리 등") },
+                            leadingIcon = { Icon(Icons.Default.Star, "필수 장소") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        AssistiveHint(text = "비워두면 AI가 자동으로 최적의 장소를 추천해요")
                     }
                 }
             }

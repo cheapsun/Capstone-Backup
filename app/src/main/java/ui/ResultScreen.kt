@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -73,7 +74,8 @@ import java.net.URLEncoder
 @Composable
 fun ResultScreen(
     rec: RecommendationResult,
-    regionHint: String? = null   // ✅ 사용자가 입력했던 지역 (예: "광주 상무동")
+    regionHint: String? = null,   // ✅ 사용자가 입력했던 지역 (예: "광주 상무동")
+    onNavigateToItinerary: (List<Place>) -> Unit = {}  // ✅ 일정 생성 화면으로 이동
 ) {
     Log.d("UI", "ResultScreen received ${rec.places.size} places (topPicks=${rec.topPicks.size})")
     rec.places.forEachIndexed { i, p ->
@@ -676,10 +678,12 @@ fun ResultScreen(
                         )
                     }
 
-                    // 루트 생성하기 버튼
+                    // 일정 생성하기 버튼
                     Button(
-                        onClick = { buildRealRoute() },
-                        enabled = selectedPlaces.size >= 2 && !isLoadingRoute,
+                        onClick = {
+                            onNavigateToItinerary(selectedPlaces.toList())
+                        },
+                        enabled = selectedPlaces.size >= 3,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
@@ -690,31 +694,27 @@ fun ResultScreen(
                             disabledElevation = 0.dp
                         )
                     ) {
-                        if (isLoadingRoute) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                "경로 생성 중...",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.Route,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "루트 생성하기 (${selectedPlaces.size}개)",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Icon(
+                            Icons.Default.CalendarMonth,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "일정 생성하기 (${selectedPlaces.size}개)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // 안내 텍스트
+                    if (selectedPlaces.size < 3) {
+                        Text(
+                            "최소 3개 장소를 선택해주세요",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
 
                     // 루트 저장 버튼 (루트 생성 완료 후에만 표시)
