@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.example.project_2.data.ItineraryStorage
 import com.example.project_2.domain.model.*
 import android.widget.Toast
+import org.burnoutcrew.reorderable.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,23 +115,13 @@ fun SavedItineraryScreen(
                             // UI 업데이트를 위해 itinerary를 재할당
                             itinerary = itinerary?.copy(days = itinerary!!.days)
                         },
-                        onMoveUp = { slot ->
+                        onReorder = { from, to ->
+                            // TimeSlot 순서 변경
                             val slots = itinerary!!.days[selectedDayTab].timeSlots
-                            val index = slots.indexOf(slot)
-                            if (index > 0) {
-                                slots.remove(slot)
-                                slots.add(index - 1, slot)
-                                itinerary = itinerary?.copy(days = itinerary!!.days)
-                            }
-                        },
-                        onMoveDown = { slot ->
-                            val slots = itinerary!!.days[selectedDayTab].timeSlots
-                            val index = slots.indexOf(slot)
-                            if (index < slots.size - 1) {
-                                slots.remove(slot)
-                                slots.add(index + 1, slot)
-                                itinerary = itinerary?.copy(days = itinerary!!.days)
-                            }
+                            val item = slots.removeAt(from)
+                            slots.add(to, item)
+                            // UI 업데이트를 위해 itinerary를 재할당
+                            itinerary = itinerary?.copy(days = itinerary!!.days)
                         }
                     )
                 }
@@ -144,12 +135,22 @@ private fun DayScheduleView(
     day: DaySchedule,
     isEditMode: Boolean,
     onDeleteSlot: (TimeSlot) -> Unit,
-    onMoveUp: (TimeSlot) -> Unit,
-    onMoveDown: (TimeSlot) -> Unit
+    onReorder: (Int, Int) -> Unit
 ) {
+    val reorderableState = rememberReorderableLazyListState(
+        onMove = { from, to ->
+            // Subtract 1 because first item is header
+            if (from.index > 0 && to.index > 0) {
+                onReorder(from.index - 1, to.index - 1)
+            }
+        }
+    )
+
     LazyColumn(
-        state = rememberLazyListState(),
-        modifier = Modifier.fillMaxSize(),
+        state = reorderableState.listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .reorderable(reorderableState),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -180,7 +181,7 @@ private fun DayScheduleView(
                         }
                         if (isEditMode) {
                             Text(
-                                "화살표로 순서 변경",
+                                "드래그하여 순서 변경",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                             )
@@ -192,15 +193,15 @@ private fun DayScheduleView(
 
         // 시간대별 일정
         itemsIndexed(day.timeSlots, key = { _, slot -> slot.id }) { index, slot ->
-            TimeSlotCard(
-                slot = slot,
-                isEditMode = isEditMode,
-                isFirst = index == 0,
-                isLast = index == day.timeSlots.size - 1,
-                onDelete = if (isEditMode) { { onDeleteSlot(slot) } } else null,
-                onMoveUp = if (isEditMode && index > 0) { { onMoveUp(slot) } } else null,
-                onMoveDown = if (isEditMode && index < day.timeSlots.size - 1) { { onMoveDown(slot) } } else null
-            )
+            ReorderableItem(reorderableState, key = slot.id) { isDragging ->
+                TimeSlotCard(
+                    slot = slot,
+                    isEditMode = isEditMode,
+                    isDragging = isDragging,
+                    reorderableState = reorderableState,
+                    onDelete = if (isEditMode) { { onDeleteSlot(slot) } } else null
+                )
+            }
         }
     }
 }
@@ -209,56 +210,38 @@ private fun DayScheduleView(
 private fun TimeSlotCard(
     slot: TimeSlot,
     isEditMode: Boolean = false,
-    isFirst: Boolean = false,
-    isLast: Boolean = false,
-    onDelete: (() -> Unit)?,
-    onMoveUp: (() -> Unit)?,
-    onMoveDown: (() -> Unit)?
+    isDragging: Boolean = false,
+    reorderableState: ReorderableLazyListState? = null,
+    onDelete: (() -> Unit)?
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isDragging) 8.dp else 2.dp
+        ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDragging) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        )
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 순서 변경 버튼 (편집 모드일 때만)
-            if (isEditMode) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    IconButton(
-                        onClick = { onMoveUp?.invoke() },
-                        enabled = onMoveUp != null,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.KeyboardArrowUp,
-                            contentDescription = "위로",
-                            tint = if (onMoveUp != null)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
-                    }
-                    IconButton(
-                        onClick = { onMoveDown?.invoke() },
-                        enabled = onMoveDown != null,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.KeyboardArrowDown,
-                            contentDescription = "아래로",
-                            tint = if (onMoveDown != null)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
-                    }
-                }
+            // 드래그 핸들 (편집 모드일 때만)
+            if (isEditMode && reorderableState != null) {
+                Icon(
+                    imageVector = Icons.Default.DragHandle,
+                    contentDescription = "드래그",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .detectReorderAfterLongPress(reorderableState)
+                )
             }
 
             // 시간
@@ -327,7 +310,7 @@ private fun TimeSlotCard(
             }
 
             // 삭제 버튼 (편집 모드일 때만)
-            if (onDelete != null) {
+            if (isEditMode && onDelete != null) {
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Close,
