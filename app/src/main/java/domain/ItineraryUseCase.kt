@@ -204,6 +204,14 @@ $placesText
         Log.d(TAG, "Category distribution: FOOD=${foodPlaces.size}, CAFE=${cafePlaces.size}, " +
                 "NIGHT=${nightPlaces.size}, STAY=${stayPlaces.size}, OTHER=${otherPlaces.size}")
 
+        // 각 카테고리를 days 수로 나누어 균등하게 분배
+        val foodPerDay = if (foodPlaces.size > 0) maxOf(1, foodPlaces.size / days) else 0
+        val cafePerDay = if (cafePlaces.size > 0) maxOf(1, cafePlaces.size / days) else 0
+        val otherPerDay = if (otherPlaces.size > 0) maxOf(1, otherPlaces.size / days) else 0
+        val nightPerDay = if (nightPlaces.size > 0) maxOf(1, nightPlaces.size / days) else 0
+
+        Log.d(TAG, "Per day allocation: FOOD=$foodPerDay, CAFE=$cafePerDay, OTHER=$otherPerDay, NIGHT=$nightPerDay")
+
         val schedules = mutableListOf<DaySchedule>()
         var foodIndex = 0
         var cafeIndex = 0
@@ -214,26 +222,36 @@ $placesText
             val slots = mutableListOf<TimeSlot>()
             var currentTime = LocalTime.of(9, 0)
 
+            // 이 날에 배치할 장소 수 제한 설정
+            val foodEndIndex = minOf(foodIndex + foodPerDay + 1, foodPlaces.size)
+            val cafeEndIndex = minOf(cafeIndex + cafePerDay + 1, cafePlaces.size)
+            val otherEndIndex = minOf(otherIndex + otherPerDay + 2, otherPlaces.size) // 오전과 오후에 나누어 배치
+            val nightEndIndex = minOf(nightIndex + nightPerDay + 1, nightPlaces.size)
+
             // ===== 오전 (09:00-12:00) =====
             // OTHER, FOOD(브런치), CAFE를 시간이 허락하는 한 배치
-            while (currentTime.hour < 12) {
+            var morningOtherAdded = 0
+            val morningOtherLimit = maxOf(1, (otherEndIndex - otherIndex) / 2)
+
+            while (currentTime.hour < 12 && currentTime.minute < 30) {
                 val nextPlace = when {
-                    otherIndex < otherPlaces.size -> otherPlaces[otherIndex++]
-                    foodIndex < foodPlaces.size && currentTime.hour < 11 -> foodPlaces[foodIndex++]
-                    cafeIndex < cafePlaces.size -> cafePlaces[cafeIndex++]
+                    otherIndex < otherEndIndex && morningOtherAdded < morningOtherLimit -> {
+                        morningOtherAdded++
+                        otherPlaces[otherIndex++]
+                    }
+                    foodIndex < foodEndIndex && currentTime.hour < 11 -> foodPlaces[foodIndex++]
+                    cafeIndex < cafeEndIndex && currentTime.hour >= 10 -> cafePlaces[cafeIndex++]
                     else -> break
                 }
 
                 val duration = getDurationForCategory(nextPlace.category)
                 slots.add(createTimeSlot(nextPlace, currentTime, duration))
-                currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(20)
-
-                if (currentTime.hour >= 12) break
+                currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(15) // 이동 시간 15분으로 단축
             }
 
             // ===== 점심 (12:00-13:30) =====
             currentTime = LocalTime.of(12, 0)
-            if (foodIndex < foodPlaces.size) {
+            if (foodIndex < foodEndIndex) {
                 val place = foodPlaces[foodIndex++]
                 slots.add(createTimeSlot(place, currentTime, 90))
             } else if (autoAddMeals) {
@@ -243,24 +261,22 @@ $placesText
 
             // ===== 오후 (13:30-18:00) =====
             // OTHER, CAFE, 추가 FOOD를 번갈아가며 배치
-            while (currentTime.hour < 18) {
+            while (currentTime.hour < 18 && currentTime.minute < 30) {
                 val nextPlace = when {
-                    otherIndex < otherPlaces.size -> otherPlaces[otherIndex++]
-                    cafeIndex < cafePlaces.size -> cafePlaces[cafeIndex++]
-                    foodIndex < foodPlaces.size -> foodPlaces[foodIndex++]
+                    otherIndex < otherEndIndex -> otherPlaces[otherIndex++]
+                    cafeIndex < cafeEndIndex -> cafePlaces[cafeIndex++]
+                    foodIndex < foodEndIndex -> foodPlaces[foodIndex++]
                     else -> break
                 }
 
                 val duration = getDurationForCategory(nextPlace.category)
                 slots.add(createTimeSlot(nextPlace, currentTime, duration))
-                currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(20)
-
-                if (currentTime.hour >= 18) break
+                currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(15)
             }
 
             // ===== 저녁 (18:00-19:30) =====
             currentTime = LocalTime.of(18, 0)
-            if (foodIndex < foodPlaces.size) {
+            if (foodIndex < foodEndIndex) {
                 val place = foodPlaces[foodIndex++]
                 slots.add(createTimeSlot(place, currentTime, 90))
             } else if (autoAddMeals) {
@@ -270,19 +286,17 @@ $placesText
 
             // ===== 야간 (19:30-22:00) =====
             // NIGHT > CAFE > FOOD 순서로 배치
-            while (currentTime.hour < 22) {
+            while (currentTime.hour < 22 && currentTime.minute < 30) {
                 val nextPlace = when {
-                    nightIndex < nightPlaces.size -> nightPlaces[nightIndex++]
-                    cafeIndex < cafePlaces.size -> cafePlaces[cafeIndex++]
-                    foodIndex < foodPlaces.size -> foodPlaces[foodIndex++]
+                    nightIndex < nightEndIndex -> nightPlaces[nightIndex++]
+                    cafeIndex < cafeEndIndex -> cafePlaces[cafeIndex++]
+                    foodIndex < foodEndIndex -> foodPlaces[foodIndex++]
                     else -> break
                 }
 
                 val duration = getDurationForCategory(nextPlace.category)
                 slots.add(createTimeSlot(nextPlace, currentTime, duration))
                 currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(15)
-
-                if (currentTime.hour >= 22) break
             }
 
             schedules.add(DaySchedule(day = dayIndex + 1, timeSlots = slots))

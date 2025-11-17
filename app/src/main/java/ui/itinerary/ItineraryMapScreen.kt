@@ -80,7 +80,7 @@ fun ItineraryMapScreen(
     }
 
     // 경로 계산 및 표시
-    LaunchedEffect(kakaoMap, selectedDay, currentDayPlaces) {
+    LaunchedEffect(kakaoMap, selectedDay, currentDayPlaces, selectedSegmentIndex) {
         kakaoMap?.let { map ->
             if (currentDayPlaces.size >= 2) {
                 isLoadingRoute = true
@@ -90,38 +90,84 @@ fun ItineraryMapScreen(
                     map.labelManager?.layer?.removeAll()
                     map.routeLineManager?.layer?.removeAll()
 
-                    // 마커 추가
-                    currentDayPlaces.forEachIndexed { index, place ->
-                        val bitmap = createNumberedMarkerBitmap(
-                            number = index + 1,
-                            color = segmentColors[index % segmentColors.size]
+                    // 선택된 구간이 있으면 해당 구간만, 없으면 전체 표시
+                    if (selectedSegmentIndex != null) {
+                        // 선택된 구간만 표시
+                        val fromPlace = currentDayPlaces[selectedSegmentIndex]
+                        val toPlace = currentDayPlaces[selectedSegmentIndex + 1]
+
+                        // 마커 추가 (선택된 구간의 시작과 끝만)
+                        val startBitmap = createNumberedMarkerBitmap(
+                            number = selectedSegmentIndex + 1,
+                            color = segmentColors[selectedSegmentIndex % segmentColors.size]
+                        )
+                        val endBitmap = createNumberedMarkerBitmap(
+                            number = selectedSegmentIndex + 2,
+                            color = segmentColors[(selectedSegmentIndex + 1) % segmentColors.size]
                         )
 
-                        val options = LabelOptions.from(LatLng.from(place.lat!!, place.lng!!))
-                            .setStyles(LabelStyles.from(LabelStyle.from(bitmap).setApplyDpScale(false)))
+                        map.labelManager?.layer?.addLabel(
+                            LabelOptions.from(LatLng.from(fromPlace.lat!!, fromPlace.lng!!))
+                                .setStyles(LabelStyles.from(LabelStyle.from(startBitmap).setApplyDpScale(false)))
+                        )
+                        map.labelManager?.layer?.addLabel(
+                            LabelOptions.from(LatLng.from(toPlace.lat!!, toPlace.lng!!))
+                                .setStyles(LabelStyles.from(LabelStyle.from(endBitmap).setApplyDpScale(false)))
+                        )
 
-                        map.labelManager?.layer?.addLabel(options)
-                    }
+                        // T-Map으로 선택된 구간 경로만 가져오기
+                        val segments = TmapPedestrianService.getFullRoute(listOf(fromPlace, toPlace))
 
-                    // T-Map으로 경로 가져오기
-                    val segments = TmapPedestrianService.getFullRoute(currentDayPlaces)
-
-                    // 경로 라인 그리기
-                    segments.forEachIndexed { index, segment ->
-                        if (segment.pathCoordinates.isNotEmpty()) {
-                            val colorHex = segmentColors[index % segmentColors.size]
+                        if (segments.isNotEmpty() && segments[0].pathCoordinates.isNotEmpty()) {
+                            val colorHex = segmentColors[selectedSegmentIndex % segmentColors.size]
                             val color = Color.parseColor(colorHex)
 
                             val options = RouteLineOptions.from(
-                                RouteLineSegment.from(segment.pathCoordinates)
+                                RouteLineSegment.from(segments[0].pathCoordinates)
                                     .setStyles(
                                         RouteLineStyles.from(
-                                            RouteLineStyle.from(6f, color)
+                                            RouteLineStyle.from(8f, color)
                                         )
                                     )
                             )
 
                             map.routeLineManager?.layer?.addRouteLine(options)?.show()
+                        }
+                    } else {
+                        // 전체 구간 표시
+                        // 마커 추가
+                        currentDayPlaces.forEachIndexed { index, place ->
+                            val bitmap = createNumberedMarkerBitmap(
+                                number = index + 1,
+                                color = segmentColors[index % segmentColors.size]
+                            )
+
+                            val options = LabelOptions.from(LatLng.from(place.lat!!, place.lng!!))
+                                .setStyles(LabelStyles.from(LabelStyle.from(bitmap).setApplyDpScale(false)))
+
+                            map.labelManager?.layer?.addLabel(options)
+                        }
+
+                        // T-Map으로 경로 가져오기
+                        val segments = TmapPedestrianService.getFullRoute(currentDayPlaces)
+
+                        // 경로 라인 그리기
+                        segments.forEachIndexed { index, segment ->
+                            if (segment.pathCoordinates.isNotEmpty()) {
+                                val colorHex = segmentColors[index % segmentColors.size]
+                                val color = Color.parseColor(colorHex)
+
+                                val options = RouteLineOptions.from(
+                                    RouteLineSegment.from(segment.pathCoordinates)
+                                        .setStyles(
+                                            RouteLineStyles.from(
+                                                RouteLineStyle.from(6f, color)
+                                            )
+                                        )
+                                )
+
+                                map.routeLineManager?.layer?.addRouteLine(options)?.show()
+                            }
                         }
                     }
 
@@ -292,21 +338,6 @@ fun ItineraryMapScreen(
                         isSelected = isSelected,
                         onClick = {
                             selectedSegmentIndex = if (isSelected) null else index
-                            kakaoMap?.let { map ->
-                                if (!isSelected) {
-                                    // Focus on selected segment
-                                    val midLat = (place.lat!! + nextPlace.lat!!) / 2
-                                    val midLng = (place.lng!! + nextPlace.lng!!) / 2
-                                    map.moveCamera(
-                                        CameraUpdateFactory.newCenterPosition(
-                                            LatLng.from(midLat, midLng), 14
-                                        )
-                                    )
-                                } else {
-                                    // Back to full view
-                                    updateMapCamera(map, currentDayPlaces, null)
-                                }
-                            }
                         }
                     )
                 }
