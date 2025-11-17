@@ -30,6 +30,8 @@ fun ItineraryScreen(
     var isLoading by remember { mutableStateOf(true) }
     var selectedDayTab by remember { mutableStateOf(0) }
     var isEditMode by remember { mutableStateOf(false) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var itineraryName by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     // 일정 생성
@@ -81,7 +83,13 @@ fun ItineraryScreen(
                         }
 
                         Button(
-                            onClick = { itinerary?.let { onSaveItinerary(it) } },
+                            onClick = {
+                                itinerary?.let {
+                                    // 기본 이름 생성: "N일 여행 일정"
+                                    itineraryName = "${filter.duration.toDays()}일 여행 일정"
+                                    showSaveDialog = true
+                                }
+                            },
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.Save, null, Modifier.size(20.dp))
@@ -161,6 +169,48 @@ fun ItineraryScreen(
                 }
             }
         }
+    }
+
+    // 저장 다이얼로그
+    if (showSaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveDialog = false },
+            title = { Text("일정 저장") },
+            text = {
+                Column {
+                    Text("일정 이름을 입력하세요")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = itineraryName,
+                        onValueChange = { itineraryName = it },
+                        label = { Text("일정 이름") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (itineraryName.isNotBlank()) {
+                            itinerary?.let {
+                                it.name = itineraryName
+                                onSaveItinerary(it)
+                            }
+                            showSaveDialog = false
+                        }
+                    },
+                    enabled = itineraryName.isNotBlank()
+                ) {
+                    Text("저장")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveDialog = false }) {
+                    Text("취소")
+                }
+            }
+        )
     }
 }
 

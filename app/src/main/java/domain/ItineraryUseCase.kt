@@ -66,8 +66,8 @@ class ItineraryUseCase(
         } else ""
 
         return """
-당신은 여행 일정 플래너입니다.
-선택된 ${places.size}개 장소를 ${days}일 일정으로 배치해주세요.
+당신은 여행 일정 최적화 전문 AI입니다.
+선택된 ${places.size}개 장소를 ${days}일 일정에 **최대한 많이** 포함하되, 여행자의 피로도와 동선을 고려하여 스마트하게 배치해주세요.
 
 [선택된 장소]
 $placesText
@@ -76,34 +76,47 @@ $placesText
 - 총 ${days}일 일정
 - 인원: ${filter.numberOfPeople}명$mandatoryText
 
-[중요 규칙]
-1. 시간대별 활동 배치:
-   - 09:00-12:00 (오전): 관광지, 사진 명소, 문화 시설, 체험 활동
-   - 12:00-13:30 (점심): FOOD 카테고리 장소 또는 "MEAL" 활동 (반드시 포함)
-   - 13:30-17:00 (오후): 관광지, 카페, 쇼핑
-   - 18:00-19:30 (저녁): FOOD 카테고리 장소 또는 "MEAL" 활동 (반드시 포함)
-   - 19:30-22:00 (야간): 나이트 명소, 야경
+[핵심 목표]
+1. **가능한 많은 장소를 포함** (${places.size}개 중 최소 80% 이상 포함 목표)
+2. 각 장소의 거리와 중요도를 고려하여 **체류 시간과 이동 시간을 동적으로 조정**
+3. 시간대별 특성에 맞는 장소 배치
 
-2. 카테고리별 배치 규칙:
-   - FOOD: 점심(12:00) 또는 저녁(18:00) 시간대에만 배치
-   - CAFE: 오후(14:00-17:00) 시간대에 배치
-   - PHOTO, CULTURE, HEALING, EXPERIENCE: 오전/오후 시간대 배치
-   - NIGHT: 저녁(19:30 이후) 시간대에 배치
+[시간대별 활동 가이드]
+- 08:30-12:00 (오전): 관광지, 사진 명소, 문화 시설, 체험 활동
+- 12:00-13:30 (점심): FOOD 카테고리 장소 또는 "MEAL" 활동
+- 13:30-18:00 (오후): 관광지, 카페, 쇼핑, 힐링 장소
+- 18:00-19:30 (저녁): FOOD 카테고리 장소 또는 "MEAL" 활동
+- 19:30-22:30 (야간): 나이트 명소, 야경, 카페
 
-3. 필수 식사 시간:
-   - 점심: 12:00 (90분)
-   - 저녁: 18:00 (90분)
-   - FOOD 카테고리 장소가 있으면 해당 시간대에 배치, 없으면 "MEAL" 활동으로 삽입
+[스마트 시간 배분 규칙]
+1. **체류 시간을 유연하게 조정** (카테고리별 권장 시간은 참고만 하고 실제로는 동적으로 조정):
+   - FOOD: 60-90분 (간단한 식사는 60분, 여유있는 식사는 90분)
+   - CAFE: 30-60분 (휴식 겸 방문은 30분, 여유있게는 60분)
+   - PHOTO: 45-75분 (사진만 찍는 곳은 45분, 둘러볼 곳 많으면 75분)
+   - CULTURE, EXPERIENCE: 60-120분 (규모에 따라 조정)
+   - HEALING, SHOPPING: 45-90분
+   - NIGHT: 45-90분
 
-4. 체류 시간:
-   - FOOD: 90분
-   - CAFE: 60분
-   - PHOTO, HEALING: 90분
-   - CULTURE, EXPERIENCE: 120분
-   - NIGHT: 90분
-   - SHOPPING: 90분
+2. **이동 시간 최적화**:
+   - 가까운 장소(같은 지역): 5-10분
+   - 중간 거리: 15-20분
+   - 먼 거리: 25-30분
+   - 위도/경도 차이로 거리 추정하여 배정
 
-5. Day별로 장소를 균등하게 배치하되, 위 시간대 규칙을 준수
+3. **더 많은 장소 포함을 위한 전략**:
+   - 가까운 장소들은 체류 시간을 짧게 조정
+   - 이동 동선을 최적화하여 이동 시간 최소화
+   - 하루에 8-12개 장소 포함 목표 (식사 포함)
+   - 필요시 오전을 08:30부터, 야간을 22:30까지 활용
+
+4. **필수 식사**:
+   - 점심: 12:00-13:30 (60-90분)
+   - 저녁: 18:00-19:30 (60-90분)
+   - FOOD 카테고리 장소가 있으면 우선 배치, 없으면 "MEAL" 활동
+
+5. **Day별 균등 배치**:
+   - ${days}일이면 각 날마다 약 ${(places.size.toDouble() / days).toInt()}-${(places.size.toDouble() / days + 2).toInt()}개 장소 배치
+   - 거리와 동선을 고려하여 같은 지역 장소들을 같은 날에 배치
 
 출력 형식 (JSON):
 {
@@ -111,16 +124,18 @@ $placesText
     {
       "day": 1,
       "slots": [
-        {"place_id": 0, "start_time": "09:00", "duration_min": 120, "activity": "VISIT"},
-        {"place_id": 2, "start_time": "12:00", "duration_min": 90, "activity": "VISIT"},
-        {"activity": "MEAL", "start_time": "18:00", "duration_min": 90}
+        {"place_id": 0, "start_time": "08:30", "duration_min": 60, "activity": "VISIT"},
+        {"place_id": 1, "start_time": "09:40", "duration_min": 75, "activity": "VISIT"},
+        {"place_id": 2, "start_time": "11:10", "duration_min": 45, "activity": "VISIT"},
+        {"place_id": 3, "start_time": "12:00", "duration_min": 60, "activity": "VISIT"},
+        {"place_id": 4, "start_time": "13:10", "duration_min": 60, "activity": "VISIT"},
+        {"activity": "MEAL", "start_time": "18:00", "duration_min": 75}
       ]
     }
   ]
 }
 
-주의: place_id는 FOOD/CAFE 등 해당 카테고리 장소가 있을 때만 사용하고,
-      장소가 없으면 "activity": "MEAL"로 식사 시간만 표시하세요.
+**중요**: 가능한 많은 장소를 포함하되, 시간 배분은 위 가이드를 참고하여 각 장소에 맞게 동적으로 조정하세요.
 """.trimIndent()
     }
 
@@ -212,9 +227,9 @@ $placesText
 
         for (dayIndex in 0 until days) {
             val slots = mutableListOf<TimeSlot>()
-            var currentTime = LocalTime.of(9, 0)
+            var currentTime = LocalTime.of(8, 30)  // 09:00 -> 08:30 (조금 더 일찍 시작)
 
-            // ===== 오전 (09:00-12:00) =====
+            // ===== 오전 (08:30-12:00) =====
             // OTHER, FOOD(브런치), CAFE를 시간이 허락하는 한 배치
             while (currentTime.hour < 12 || (currentTime.hour == 12 && currentTime.minute == 0)) {
                 val nextPlace = when {
@@ -230,7 +245,7 @@ $placesText
                 // 점심 시간(12:00) 전에 끝나야 함
                 if (endTime.hour < 12 || (endTime.hour == 12 && endTime.minute == 0)) {
                     slots.add(createTimeSlot(nextPlace, currentTime, duration))
-                    currentTime = endTime.plusMinutes(20) // 이동 시간
+                    currentTime = endTime.plusMinutes(10) // 이동 시간 (20 -> 10분)
                 } else {
                     // 다음 장소는 점심 후로
                     when (nextPlace.category) {
@@ -242,17 +257,17 @@ $placesText
                 }
             }
 
-            // ===== 점심 (12:00-13:30) =====
+            // ===== 점심 (12:00-13:00) =====
             currentTime = LocalTime.of(12, 0)
             if (foodIndex < foodPlaces.size) {
                 val place = foodPlaces[foodIndex++]
-                slots.add(createTimeSlot(place, currentTime, 90))
+                slots.add(createTimeSlot(place, currentTime, 60))  // 90 -> 60분
             } else if (autoAddMeals) {
-                slots.add(createMealSlot(currentTime, 90))
+                slots.add(createMealSlot(currentTime, 60))  // 90 -> 60분
             }
-            currentTime = LocalTime.of(13, 30)
+            currentTime = LocalTime.of(13, 0)  // 13:30 -> 13:00
 
-            // ===== 오후 (13:30-18:00) =====
+            // ===== 오후 (13:00-18:00) =====
             // OTHER, CAFE, 추가 FOOD를 번갈아가며 배치
             while (currentTime.hour < 18) {
                 val nextPlace = when {
@@ -268,7 +283,7 @@ $placesText
                 // 저녁 시간(18:00) 전에 끝나야 함
                 if (endTime.hour < 18) {
                     slots.add(createTimeSlot(nextPlace, currentTime, duration))
-                    currentTime = endTime.plusMinutes(20)
+                    currentTime = endTime.plusMinutes(10)  // 20 -> 10분
                 } else {
                     // 다음 장소는 저녁 후로
                     when (nextPlace.category) {
@@ -280,19 +295,19 @@ $placesText
                 }
             }
 
-            // ===== 저녁 (18:00-19:30) =====
+            // ===== 저녁 (18:00-19:00) =====
             currentTime = LocalTime.of(18, 0)
             if (foodIndex < foodPlaces.size) {
                 val place = foodPlaces[foodIndex++]
-                slots.add(createTimeSlot(place, currentTime, 90))
+                slots.add(createTimeSlot(place, currentTime, 60))  // 90 -> 60분
             } else if (autoAddMeals) {
-                slots.add(createMealSlot(currentTime, 90))
+                slots.add(createMealSlot(currentTime, 60))  // 90 -> 60분
             }
-            currentTime = LocalTime.of(19, 30)
+            currentTime = LocalTime.of(19, 0)  // 19:30 -> 19:00
 
-            // ===== 야간 (19:30-22:00) =====
+            // ===== 야간 (19:00-22:30) =====
             // NIGHT > CAFE > FOOD 순서로 배치
-            while (currentTime.hour < 22) {
+            while (currentTime.hour < 22 || (currentTime.hour == 22 && currentTime.minute < 30)) {
                 val nextPlace = when {
                     nightIndex < nightPlaces.size -> nightPlaces[nightIndex++]
                     cafeIndex < cafePlaces.size -> cafePlaces[cafeIndex++]
@@ -303,10 +318,10 @@ $placesText
                 val duration = getDurationForCategory(nextPlace.category)
                 val endTime = currentTime.plusMinutes(duration.toLong())
 
-                // 22:00 전에 끝나야 함
-                if (endTime.hour <= 22) {
+                // 22:30 전에 끝나야 함
+                if (endTime.hour < 22 || (endTime.hour == 22 && endTime.minute <= 30)) {
                     slots.add(createTimeSlot(nextPlace, currentTime, duration))
-                    currentTime = endTime.plusMinutes(15)
+                    currentTime = endTime.plusMinutes(10)  // 15 -> 10분
                 } else {
                     // 시간 초과
                     when (nextPlace.category) {
@@ -326,11 +341,12 @@ $placesText
     }
 
     private fun getDurationForCategory(category: Category): Int = when (category) {
-        Category.FOOD -> 90
-        Category.CAFE -> 60
-        Category.CULTURE, Category.EXPERIENCE -> 120
-        Category.PHOTO, Category.HEALING, Category.SHOPPING -> 90
-        Category.NIGHT -> 90
+        Category.FOOD -> 60           // 90 -> 60분 (더 빠른 식사)
+        Category.CAFE -> 45           // 60 -> 45분 (짧은 휴식)
+        Category.CULTURE, Category.EXPERIENCE -> 75  // 120 -> 75분 (효율적 관람)
+        Category.PHOTO -> 45          // 90 -> 45분 (사진 촬영)
+        Category.HEALING, Category.SHOPPING -> 60    // 90 -> 60분
+        Category.NIGHT -> 60          // 90 -> 60분
         Category.STAY -> 0
     }
 

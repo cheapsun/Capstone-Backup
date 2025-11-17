@@ -9,6 +9,7 @@ import java.util.UUID
 /** 전체 일정 */
 data class Itinerary(
     val id: String = UUID.randomUUID().toString(),
+    var name: String = "",                      // 일정 이름
     val days: List<DaySchedule>,
     val createdAt: Long = System.currentTimeMillis()
 )

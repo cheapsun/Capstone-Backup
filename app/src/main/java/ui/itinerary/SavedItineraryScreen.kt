@@ -30,6 +30,8 @@ fun SavedItineraryScreen(
     var itinerary by remember { mutableStateOf(storage.getItinerary(itineraryId)) }
     var selectedDayTab by remember { mutableStateOf(0) }
     var isEditMode by remember { mutableStateOf(false) }
+    var showNameEditDialog by remember { mutableStateOf(false) }
+    var editingName by remember { mutableStateOf("") }
 
     if (itinerary == null) {
         Box(
@@ -44,13 +46,32 @@ fun SavedItineraryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("${itinerary!!.days.size}일 여행 일정") },
+                title = {
+                    Column {
+                        if (itinerary!!.name.isNotBlank()) {
+                            Text(
+                                itinerary!!.name,
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                        } else {
+                            Text("${itinerary!!.days.size}일 여행 일정")
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, "뒤로")
                     }
                 },
                 actions = {
+                    // 이름 편집 버튼
+                    IconButton(onClick = {
+                        editingName = itinerary!!.name.ifBlank { "${itinerary!!.days.size}일 여행 일정" }
+                        showNameEditDialog = true
+                    }) {
+                        Icon(Icons.Default.DriveFileRenameOutline, "이름 변경")
+                    }
+
                     if (isEditMode) {
                         IconButton(onClick = {
                             storage.saveItinerary(itinerary!!)
@@ -145,6 +166,47 @@ fun SavedItineraryScreen(
                 }
             }
         }
+    }
+
+    // 이름 편집 다이얼로그
+    if (showNameEditDialog) {
+        AlertDialog(
+            onDismissRequest = { showNameEditDialog = false },
+            title = { Text("일정 이름 변경") },
+            text = {
+                Column {
+                    Text("새로운 일정 이름을 입력하세요")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editingName,
+                        onValueChange = { editingName = it },
+                        label = { Text("일정 이름") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (editingName.isNotBlank()) {
+                            itinerary = itinerary?.copy(name = editingName)
+                            storage.saveItinerary(itinerary!!)
+                            Toast.makeText(context, "이름이 변경되었습니다", Toast.LENGTH_SHORT).show()
+                            showNameEditDialog = false
+                        }
+                    },
+                    enabled = editingName.isNotBlank()
+                ) {
+                    Text("변경")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNameEditDialog = false }) {
+                    Text("취소")
+                }
+            }
+        )
     }
 }
 
