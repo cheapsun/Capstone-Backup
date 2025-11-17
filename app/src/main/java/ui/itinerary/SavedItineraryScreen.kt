@@ -32,6 +32,10 @@ fun SavedItineraryScreen(
     var isEditMode by remember { mutableStateOf(false) }
     var showNameEditDialog by remember { mutableStateOf(false) }
     var editingName by remember { mutableStateOf("") }
+    var showMoveDayDialog by remember { mutableStateOf(false) }
+    var slotToMove by remember { mutableStateOf<Pair<Int, TimeSlot>?>(null) } // (fromDay, slot)
+    var showAddPlaceDialog by remember { mutableStateOf(false) }
+    var targetDayForAdd by remember { mutableStateOf(0) }
 
     if (itinerary == null) {
         Box(
@@ -129,7 +133,9 @@ fun SavedItineraryScreen(
                 if (selectedDayTab < itinerary!!.days.size) {
                     DayScheduleView(
                         day = itinerary!!.days[selectedDayTab],
+                        dayIndex = selectedDayTab,
                         isEditMode = isEditMode,
+                        totalDays = itinerary!!.days.size,
                         onDeleteSlot = { slot ->
                             // TimeSlot 삭제 - 새로운 리스트 생성하여 참조 변경
                             itinerary = itinerary?.copy(
@@ -161,11 +167,105 @@ fun SavedItineraryScreen(
                                     }
                                 }
                             )
+                        },
+                        onMoveToDay = { slot ->
+                            slotToMove = selectedDayTab to slot
+                            showMoveDayDialog = true
+                        },
+                        onAddPlace = {
+                            targetDayForAdd = selectedDayTab
+                            showAddPlaceDialog = true
                         }
                     )
                 }
             }
         }
+    }
+
+    // Day 간 이동 다이얼로그
+    if (showMoveDayDialog && slotToMove != null) {
+        val (fromDay, slot) = slotToMove!!
+        AlertDialog(
+            onDismissRequest = { showMoveDayDialog = false },
+            title = { Text("다른 날로 이동") },
+            text = {
+                Column {
+                    Text("이동할 날짜를 선택하세요")
+                    Spacer(Modifier.height(16.dp))
+                    itinerary!!.days.forEachIndexed { index, day ->
+                        if (index != fromDay) {
+                            OutlinedButton(
+                                onClick = {
+                                    // fromDay에서 제거하고 targetDay에 추가
+                                    itinerary = itinerary?.copy(
+                                        days = itinerary!!.days.mapIndexed { dayIndex, d ->
+                                            when (dayIndex) {
+                                                fromDay -> d.copy(
+                                                    timeSlots = d.timeSlots.toMutableList().apply {
+                                                        remove(slot)
+                                                    }
+                                                )
+                                                index -> d.copy(
+                                                    timeSlots = d.timeSlots.toMutableList().apply {
+                                                        add(slot)
+                                                    }
+                                                )
+                                                else -> d
+                                            }
+                                        }
+                                    )
+                                    storage.saveItinerary(itinerary!!)
+                                    Toast.makeText(context, "Day ${index + 1}로 이동했습니다", Toast.LENGTH_SHORT).show()
+                                    showMoveDayDialog = false
+                                    slotToMove = null
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Text("Day ${day.day} (${day.timeSlots.size}개 일정)")
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = {
+                    showMoveDayDialog = false
+                    slotToMove = null
+                }) {
+                    Text("취소")
+                }
+            }
+        )
+    }
+
+    // 장소 추가 안내 다이얼로그 (간단 버전)
+    if (showAddPlaceDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddPlaceDialog = false },
+            title = { Text("장소 추가") },
+            text = {
+                Column {
+                    Text("현재는 저장된 일정에 장소를 추가하려면:")
+                    Spacer(Modifier.height(8.dp))
+                    Text("1. 편집 모드에서 기존 장소를 삭제", style = MaterialTheme.typography.bodyMedium)
+                    Text("2. 뒤로 가기하여 메인 화면으로 이동", style = MaterialTheme.typography.bodyMedium)
+                    Text("3. 새로운 장소를 포함하여 일정 재생성", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text("더 편리한 장소 추가 기능은 추후 업데이트될 예정입니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAddPlaceDialog = false }) {
+                    Text("확인")
+                }
+            }
+        )
     }
 
     // 이름 편집 다이얼로그
@@ -213,11 +313,15 @@ fun SavedItineraryScreen(
 }
 
 @Composable
-private fun DayScheduleView(
+internal fun DayScheduleView(
     day: DaySchedule,
+    dayIndex: Int,
     isEditMode: Boolean,
+    totalDays: Int,
     onDeleteSlot: (TimeSlot) -> Unit,
-    onReorder: (Int, Int) -> Unit
+    onReorder: (Int, Int) -> Unit,
+    onMoveToDay: (TimeSlot) -> Unit,
+    onAddPlace: () -> Unit
 ) {
     val reorderableState = rememberReorderableLazyListState(
         onMove = { from, to ->
@@ -262,11 +366,27 @@ private fun DayScheduleView(
                             )
                         }
                         if (isEditMode) {
-                            Text(
-                                "드래그하여 순서 변경",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 장소 추가 버튼
+                                IconButton(
+                                    onClick = onAddPlace,
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = "장소 추가",
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                                Text(
+                                    "드래그하여 순서 변경",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
                         }
                     }
                 }
@@ -281,7 +401,9 @@ private fun DayScheduleView(
                     isEditMode = isEditMode,
                     isDragging = isDragging,
                     reorderableState = reorderableState,
-                    onDelete = if (isEditMode) { { onDeleteSlot(slot) } } else null
+                    canMoveToOtherDay = totalDays > 1,
+                    onDelete = if (isEditMode) { { onDeleteSlot(slot) } } else null,
+                    onMoveToDay = if (isEditMode && totalDays > 1) { { onMoveToDay(slot) } } else null
                 )
             }
         }
@@ -289,12 +411,14 @@ private fun DayScheduleView(
 }
 
 @Composable
-private fun TimeSlotCard(
+internal fun TimeSlotCard(
     slot: TimeSlot,
     isEditMode: Boolean = false,
     isDragging: Boolean = false,
     reorderableState: ReorderableLazyListState? = null,
-    onDelete: (() -> Unit)?
+    canMoveToOtherDay: Boolean = false,
+    onDelete: (() -> Unit)?,
+    onMoveToDay: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -391,14 +515,30 @@ private fun TimeSlotCard(
                 }
             }
 
-            // 삭제 버튼 (편집 모드일 때만)
-            if (isEditMode && onDelete != null) {
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "삭제",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+            // 액션 버튼들 (편집 모드일 때만)
+            if (isEditMode) {
+                Row {
+                    // 다른 날로 이동 버튼
+                    if (canMoveToOtherDay && onMoveToDay != null) {
+                        IconButton(onClick = onMoveToDay) {
+                            Icon(
+                                Icons.Default.SwapVert,
+                                contentDescription = "다른 날로 이동",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    // 삭제 버튼
+                    if (onDelete != null) {
+                        IconButton(onClick = onDelete) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "삭제",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -32,6 +32,9 @@ fun ItineraryScreen(
     var isEditMode by remember { mutableStateOf(false) }
     var showSaveDialog by remember { mutableStateOf(false) }
     var itineraryName by remember { mutableStateOf("") }
+    var showMoveDayDialog by remember { mutableStateOf(false) }
+    var slotToMove by remember { mutableStateOf<Pair<Int, TimeSlot>?>(null) }
+    var showAddPlaceDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // 일정 생성
@@ -125,9 +128,11 @@ fun ItineraryScreen(
 
                         // 선택된 Day의 일정
                         if (selectedDayTab < itinerary!!.days.size) {
-                            DayScheduleView(
+                            com.example.project_2.ui.itinerary.DayScheduleView(
                                 day = itinerary!!.days[selectedDayTab],
+                                dayIndex = selectedDayTab,
                                 isEditMode = isEditMode,
+                                totalDays = itinerary!!.days.size,
                                 onDeleteSlot = { slot ->
                                     // TimeSlot 삭제 - 새로운 리스트 생성하여 참조 변경
                                     itinerary = itinerary?.copy(
@@ -159,6 +164,13 @@ fun ItineraryScreen(
                                             }
                                         }
                                     )
+                                },
+                                onMoveToDay = { slot ->
+                                    slotToMove = selectedDayTab to slot
+                                    showMoveDayDialog = true
+                                },
+                                onAddPlace = {
+                                    showAddPlaceDialog = true
                                 }
                             )
                         }
@@ -169,6 +181,90 @@ fun ItineraryScreen(
                 }
             }
         }
+    }
+
+    // Day 간 이동 다이얼로그
+    if (showMoveDayDialog && slotToMove != null) {
+        val (fromDay, slot) = slotToMove!!
+        AlertDialog(
+            onDismissRequest = { showMoveDayDialog = false },
+            title = { Text("다른 날로 이동") },
+            text = {
+                Column {
+                    Text("이동할 날짜를 선택하세요")
+                    Spacer(Modifier.height(16.dp))
+                    itinerary!!.days.forEachIndexed { index, day ->
+                        if (index != fromDay) {
+                            OutlinedButton(
+                                onClick = {
+                                    itinerary = itinerary?.copy(
+                                        days = itinerary!!.days.mapIndexed { dayIndex, d ->
+                                            when (dayIndex) {
+                                                fromDay -> d.copy(
+                                                    timeSlots = d.timeSlots.toMutableList().apply {
+                                                        remove(slot)
+                                                    }
+                                                )
+                                                index -> d.copy(
+                                                    timeSlots = d.timeSlots.toMutableList().apply {
+                                                        add(slot)
+                                                    }
+                                                )
+                                                else -> d
+                                            }
+                                        }
+                                    )
+                                    showMoveDayDialog = false
+                                    slotToMove = null
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Text("Day ${day.day} (${day.timeSlots.size}개 일정)")
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = {
+                    showMoveDayDialog = false
+                    slotToMove = null
+                }) {
+                    Text("취소")
+                }
+            }
+        )
+    }
+
+    // 장소 추가 안내 다이얼로그
+    if (showAddPlaceDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddPlaceDialog = false },
+            title = { Text("장소 추가") },
+            text = {
+                Column {
+                    Text("일정 생성 중에는 장소를 추가할 수 없습니다.")
+                    Spacer(Modifier.height(8.dp))
+                    Text("장소를 추가하려면:", style = MaterialTheme.typography.bodyMedium)
+                    Text("1. 일정을 먼저 저장하세요", style = MaterialTheme.typography.bodyMedium)
+                    Text("2. 저장된 일정에서 편집 모드로 변경", style = MaterialTheme.typography.bodyMedium)
+                    Text("3. 필요한 장소를 삭제하거나 순서 변경", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text("또는 뒤로 가기하여 장소를 다시 선택하고 일정을 재생성하세요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAddPlaceDialog = false }) {
+                    Text("확인")
+                }
+            }
+        )
     }
 
     // 저장 다이얼로그
