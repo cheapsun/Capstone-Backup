@@ -215,22 +215,20 @@ $placesText
             var currentTime = LocalTime.of(9, 0)
 
             // ===== 오전 (09:00-12:00) =====
-            // OTHER가 있으면 사용, 없으면 FOOD(브런치) 또는 CAFE
-            if (otherIndex < otherPlaces.size) {
-                val place = otherPlaces[otherIndex++]
-                val duration = getDurationForCategory(place.category)
-                slots.add(createTimeSlot(place, currentTime, duration))
+            // OTHER, FOOD(브런치), CAFE를 시간이 허락하는 한 배치
+            while (currentTime.hour < 12) {
+                val nextPlace = when {
+                    otherIndex < otherPlaces.size -> otherPlaces[otherIndex++]
+                    foodIndex < foodPlaces.size && currentTime.hour < 11 -> foodPlaces[foodIndex++]
+                    cafeIndex < cafePlaces.size -> cafePlaces[cafeIndex++]
+                    else -> break
+                }
+
+                val duration = getDurationForCategory(nextPlace.category)
+                slots.add(createTimeSlot(nextPlace, currentTime, duration))
                 currentTime = currentTime.plusMinutes(duration.toLong()).plusMinutes(20)
-            } else if (foodIndex < foodPlaces.size && currentTime.hour < 11) {
-                // 브런치 타임 (09:00-11:00)
-                val place = foodPlaces[foodIndex++]
-                slots.add(createTimeSlot(place, currentTime, 90))
-                currentTime = currentTime.plusMinutes(90).plusMinutes(15)
-            } else if (cafeIndex < cafePlaces.size) {
-                // 모닝 카페
-                val place = cafePlaces[cafeIndex++]
-                slots.add(createTimeSlot(place, currentTime, 60))
-                currentTime = currentTime.plusMinutes(60).plusMinutes(15)
+
+                if (currentTime.hour >= 12) break
             }
 
             // ===== 점심 (12:00-13:30) =====
