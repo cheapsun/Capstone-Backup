@@ -94,7 +94,17 @@ class MainActivity : ComponentActivity() {
 
                             recResult?.let { rec ->
                                 val regionHint = uiState.filter.region.ifBlank { null }
-                                ResultScreen(rec, regionHint)
+                                val mandatoryPlaceName = uiState.filter.mandatoryPlace.ifBlank { null }
+                                ResultScreen(
+                                    rec = rec,
+                                    regionHint = regionHint,
+                                    mandatoryPlaceName = mandatoryPlaceName,
+                                    onNavigateToItinerary = { selectedPlaces, autoAddMeals ->
+                                        mainVm.setSelectedPlacesForItinerary(selectedPlaces)
+                                        mainVm.setAutoAddMeals(autoAddMeals)
+                                        navController.navigate("itinerary")
+                                    }
+                                )
                             } ?: run {
                                 // 추천 결과가 없을 때는 검색 화면으로 유도
                                 LaunchedEffect(Unit) {
@@ -105,10 +115,51 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
+                        composable("itinerary") {
+                            val uiState by mainVm.ui.collectAsState()
+                            val selectedPlaces = uiState.selectedPlacesForItinerary
+                            val autoAddMeals = uiState.autoAddMeals
+
+                            if (selectedPlaces.isNotEmpty()) {
+                                com.example.project_2.ui.itinerary.ItineraryScreen(
+                                    selectedPlaces = selectedPlaces,
+                                    filter = uiState.filter,
+                                    autoAddMeals = autoAddMeals,
+                                    onBack = {
+                                        navController.popBackStack()
+                                    },
+                                    onNavigateToMap = { itinerary ->
+                                        mainVm.setCurrentItineraryForMap(itinerary)
+                                        navController.navigate("itinerary_map")
+                                    },
+                                    onSaveItinerary = { itinerary ->
+                                        val storage = com.example.project_2.data.ItineraryStorage.getInstance(applicationContext)
+                                        storage.saveItinerary(itinerary)
+                                        android.widget.Toast.makeText(
+                                            applicationContext,
+                                            "일정이 저장되었습니다",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                        navController.navigate(Screen.Route.route)
+                                    }
+                                )
+                            } else {
+                                // 선택된 장소가 없으면 지도 화면으로
+                                LaunchedEffect(Unit) {
+                                    navController.popBackStack()
+                                }
+                            }
+                        }
+
                         composable(Screen.Route.route) {
                             RouteListScreen(
-                                onRouteClick = { routeId ->
-                                    navController.navigate("route_detail/$routeId")
+                                onRouteClick = { routeIdOrPath ->
+                                    // Check if it's an itinerary path or a route ID
+                                    if (routeIdOrPath.startsWith("itinerary/")) {
+                                        navController.navigate("saved_$routeIdOrPath")
+                                    } else {
+                                        navController.navigate("route_detail/$routeIdOrPath")
+                                    }
                                 }
                             )
                         }
@@ -135,6 +186,38 @@ class MainActivity : ComponentActivity() {
                                     navController.popBackStack()
                                 }
                             )
+                        }
+
+                        composable("saved_itinerary/{itineraryId}") { backStackEntry ->
+                            val itineraryId = backStackEntry.arguments?.getString("itineraryId") ?: return@composable
+                            com.example.project_2.ui.itinerary.SavedItineraryScreen(
+                                itineraryId = itineraryId,
+                                onBack = {
+                                    navController.popBackStack()
+                                },
+                                onNavigateToMap = { itinerary ->
+                                    mainVm.setCurrentItineraryForMap(itinerary)
+                                    navController.navigate("itinerary_map")
+                                }
+                            )
+                        }
+
+                        composable("itinerary_map") {
+                            val uiState by mainVm.ui.collectAsState()
+                            val itinerary = uiState.currentItineraryForMap
+
+                            if (itinerary != null) {
+                                com.example.project_2.ui.itinerary.ItineraryMapScreen(
+                                    itinerary = itinerary,
+                                    onBack = {
+                                        navController.popBackStack()
+                                    }
+                                )
+                            } else {
+                                LaunchedEffect(Unit) {
+                                    navController.popBackStack()
+                                }
+                            }
                         }
                     }
                 }

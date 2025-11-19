@@ -14,8 +14,6 @@ import java.util.concurrent.TimeUnit
  * Kakao Local REST API (키워드/카테고리/주소검색)
  * - Base URL: https://dapi.kakao.com/
  * - 인증: Authorization: KakaoAK {REST_API_KEY}
- *
- * 사용 전에 KakaoLocalService.init(BuildConfig.KAKAO_REST_API_KEY) 호출하세요.
  */
 object KakaoLocalService {
 
@@ -33,7 +31,6 @@ object KakaoLocalService {
 
         val client = OkHttpClient.Builder()
             .addInterceptor(auth)
-            // 🔒 네트워크 안정성 강화
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .writeTimeout(10, TimeUnit.SECONDS)
@@ -48,63 +45,76 @@ object KakaoLocalService {
         api = retrofit.create(KakaoLocalApi::class.java)
     }
 
-    // -------- Public Functions --------
+    // ===================================================================
+    //  지역 → 좌표 변환
+    // ===================================================================
 
-    /** 지역 문자열을 좌표(위도,경도)로 변환. 실패 시 null */
     suspend fun geocode(regionOrAddress: String): Pair<Double, Double>? {
         val svc = api ?: return null
         val resp = svc.searchAddress(regionOrAddress)
         val doc = resp.documents.firstOrNull() ?: return null
-        // Kakao는 x=경도, y=위도
         val lat = doc.y.toDoubleOrNull() ?: return null
         val lng = doc.x.toDoubleOrNull() ?: return null
         return lat to lng
     }
 
-    /**
-     * 카테고리 기반 장소 검색.
-     * - centerLat/centerLng 기준 radius(m) 내 결과를 category_group_code로 필터
-     * - 필요 시 여러 코드로 합쳐서 조회 (간단히 순차 호출 후 합치기)
-     */
+    // ===================================================================
+    //  카테고리 검색 (📌 다중 페이지 지원)
+    // ===================================================================
+
     suspend fun searchByCategories(
         centerLat: Double,
         centerLng: Double,
         categories: Set<Category>,
-        radiusMeters: Int = 3000,
-        size: Int = 15
+        radiusMeters: Int = 5000,
+        size: Int = 15,
+        maxPages: Int = 3                 // ← 추가됨 (총 45개까지 가능)
     ): List<Place> {
+
         val svc = api ?: return emptyList()
         val codes = categoryCodesFor(categories)
         if (codes.isEmpty()) return emptyList()
 
         val out = mutableListOf<Place>()
+
         for (code in codes) {
-            val resp = svc.searchByCategory(
-                categoryGroupCode = code,
-                x = centerLng,
-                y = centerLat,
-                radius = radiusMeters,
-                size = size,
-                sort = "distance"
-            )
-            out += resp.documents.mapNotNull { it.toPlace() }
+            for (page in 1..maxPages) {
+                val resp = svc.searchByCategory(
+                    categoryGroupCode = code,
+                    x = centerLng,
+                    y = centerLat,
+                    radius = radiusMeters,
+                    size = size,          // size ≤ 15 (카카오 제한)
+                    page = page,
+                    sort = "distance"
+                )
+
+                // 결과 문서가 없으면 더 이상 페이지 없음 → 중단
+                if (resp.documents.isEmpty()) break
+
+                out += resp.documents.mapNotNull { it.toPlace() }
+            }
         }
 
-        // 🔁 id 중복 제거 + 📏 거리순 정렬(거리 없으면 뒤로)
         return out
             .distinctBy { it.id }
+            .filterNot { place -> isLowPriorityPlaceName(place.name) }
             .sortedBy { it.distanceMeters ?: Int.MAX_VALUE }
     }
 
-    /** 키워드 기반 검색 (필요 시 사용) */
+    // ===================================================================
+    //  키워드 검색 (기본 1페이지)
+    // ===================================================================
+
     suspend fun searchByKeyword(
         centerLat: Double,
         centerLng: Double,
         keyword: String,
-        radiusMeters: Int = 3000,
+        radiusMeters: Int = 5000,
         size: Int = 15
     ): List<Place> {
         val svc = api ?: return emptyList()
+
         val resp = svc.searchByKeyword(
             query = keyword,
             x = centerLng,
@@ -113,45 +123,78 @@ object KakaoLocalService {
             size = size,
             sort = "accuracy"
         )
+
         return resp.documents
             .mapNotNull { it.toPlace() }
             .distinctBy { it.id }
+            .filterNot { place -> isLowPriorityPlaceName(place.name) }
             .sortedBy { it.distanceMeters ?: Int.MAX_VALUE }
     }
 
-    // -------- Private Helpers --------
+    // ===================================================================
+    //  래핑 함수 (RealTravelRepository에서 사용)
+    // ===================================================================
 
-    /** 우리 앱의 Category → Kakao category_group_code 매핑 */
+    suspend fun searchKeyword(
+        region: String,
+        keyword: String,
+        centerLat: Double,
+        centerLng: Double,
+        radiusMeters: Int = 5000,
+        size: Int = 15
+    ): List<Place> {
+        return searchByKeyword(
+            centerLat = centerLat,
+            centerLng = centerLng,
+            keyword = keyword,
+            radiusMeters = radiusMeters,
+            size = size
+        )
+    }
+
+    // ===================================================================
+    //  카테고리 → Kakao 코드 매핑
+    // ===================================================================
+
     private fun categoryCodesFor(cats: Set<Category>): List<String> {
         if (cats.isEmpty()) return emptyList()
         val list = mutableListOf<String>()
         cats.forEach {
             when (it) {
-                Category.FOOD -> list += "FD6"      // 음식점
-                Category.CAFE -> list += "CE7"      // 카페
-                Category.CULTURE -> list += "CT1"   // 문화시설
-                Category.PHOTO -> list += "AT4"     // 관광명소(사진스팟 포괄)
+                Category.FOOD -> list += "FD6"
+                Category.CAFE -> list += "CE7"
+                Category.CULTURE -> list += "CT1"
+                Category.PHOTO -> list += "AT4"
                 Category.SHOPPING -> {
-                    list += "MT1"                   // 대형마트
-                    list += "CS2"                   // 편의점 등
+                    list += "MT1"
+                    list += "CS2"
                 }
-                Category.HEALING -> {
-                    list += "AT4"                   // 공원/명소 포괄
-                }
+                Category.HEALING -> list += "AT4"
                 Category.EXPERIENCE -> {
-                    list += "AT4"                   // 체험형 명소
-                    list += "AC5"                   // 학원/체험(보조)
+                    list += "AT4"
+                    list += "AC5"
                 }
-                Category.NIGHT -> list += "AD5"     // 숙박/야간활동 근접
-                Category.STAY -> list += "AD5"      // 숙박
+                Category.NIGHT -> list += "AD5"
+                Category.STAY -> list += "AD5"
             }
         }
         return list
     }
 
-    // -------- Retrofit DTO / API --------
+    // 저품질 장소 필터링
+    private fun isLowPriorityPlaceName(name: String): Boolean {
+        val badKeywords = listOf(
+            "구내식당", "사내식당", "학생식당", "교내식당", "급식실", "기숙사식당"
+        )
+        return badKeywords.any { keyword -> name.contains(keyword) }
+    }
+
+    // ===================================================================
+    //  Retrofit DTO / API
+    // ===================================================================
 
     private interface KakaoLocalApi {
+
         @GET("v2/local/search/address.json")
         suspend fun searchAddress(
             @Query("query") query: String
@@ -160,10 +203,11 @@ object KakaoLocalService {
         @GET("v2/local/search/category.json")
         suspend fun searchByCategory(
             @Query("category_group_code") categoryGroupCode: String,
-            @Query("x") x: Double,   // 경도
-            @Query("y") y: Double,   // 위도
-            @Query("radius") radius: Int = 3000,
+            @Query("x") x: Double,
+            @Query("y") y: Double,
+            @Query("radius") radius: Int = 5000,
             @Query("size") size: Int = 15,
+            @Query("page") page: Int = 1,               // ← 추가됨
             @Query("sort") sort: String = "distance"
         ): PlaceResp
 
@@ -172,30 +216,26 @@ object KakaoLocalService {
             @Query("query") query: String,
             @Query("x") x: Double,
             @Query("y") y: Double,
-            @Query("radius") radius: Int = 3000,
+            @Query("radius") radius: Int = 5000,
             @Query("size") size: Int = 15,
             @Query("sort") sort: String = "accuracy"
         ): PlaceResp
     }
 
-    // --- Address
+    // Address
     private data class AddressResp(val documents: List<AddressDoc> = emptyList())
-    private data class AddressDoc(
-        val x: String, // 경도
-        val y: String  // 위도
-    )
+    private data class AddressDoc(val x: String, val y: String)
 
-    // --- Place
+    // Place
     private data class PlaceResp(val documents: List<PlaceDoc> = emptyList())
     private data class PlaceDoc(
         val id: String,
         val place_name: String,
         val category_group_code: String?,
-        val x: String,              // 경도
-        val y: String,              // 위도
+        val x: String,
+        val y: String,
         val address_name: String?,
-        val distance: String? = null, // meter (문자열)
-        val place_url: String? = null
+        val distance: String? = null
     ) {
         fun toPlace(): Place? {
             val lat = y.toDoubleOrNull() ?: return null
@@ -207,8 +247,7 @@ object KakaoLocalService {
                 "CT1" -> Category.CULTURE
                 "AT4" -> Category.PHOTO
                 "MT1", "CS2" -> Category.SHOPPING
-                "AD5" -> Category.NIGHT
-                // 그 외 코드들은 대체로 문화/명소로 포괄
+                "AD5" -> Category.STAY
                 else -> Category.CULTURE
             }
             return Place(

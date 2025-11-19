@@ -23,7 +23,17 @@ enum class Category {
     }
 }
 
-enum class TripDuration { HALF_DAY, DAY, ONE_NIGHT, TWO_NIGHTS }
+enum class TripDuration {
+    HALF_DAY, DAY, ONE_NIGHT, TWO_NIGHTS;
+
+    /** 일정 생성용 일수 변환 */
+    fun toDays(): Int = when (this) {
+        HALF_DAY -> 1
+        DAY -> 1
+        ONE_NIGHT -> 2
+        TWO_NIGHTS -> 3
+    }
+}
 
 enum class Companion { SOLO, FRIENDS, COUPLE, FAMILY }
 
@@ -33,11 +43,22 @@ enum class Companion { SOLO, FRIENDS, COUPLE, FAMILY }
 
 /** 메인 검색 필터 상태 */
 data class FilterState(
+    // 🔹 도시/광역 단위 (예: "서울", "광주", "부산"...)
     val region: String = "",
+
+    // 🔹 선택한 세부 동네들 (예: ["광주 동명동", "광주 상무지구"])
+    //    - 아무것도 없으면 서버/레포지토리 쪽에서 `region` 하나만 기준으로 검색
+    val subRegions: List<String> = emptyList(),
+
     val categories: Set<Category> = emptySet(),
     val duration: TripDuration = TripDuration.DAY,
     val budgetPerPerson: Int = 30000, // 원(1인)
-    val companion: Companion = Companion.SOLO
+    val companion: Companion = Companion.SOLO,
+    val extraNote: String = "",
+
+    // app-feature-logic에서 추가
+    val numberOfPeople: Int = 1,           // 인원수
+    val mandatoryPlace: String = ""        // 필수 방문 장소 (선택)
 )
 
 /** 날씨 정보 */
@@ -57,7 +78,11 @@ data class Place(
     val distanceMeters: Int? = null,   // 중심 기준 거리 (m)
     val rating: Double? = null,        // 별점 (있을 경우)
     val address: String? = null,
-    val score: Double? = null          // GPT 재랭크 점수 (추가됨)
+    val score: Double? = null,         // GPT 재랭크 점수 (추가됨)
+    // ✅ 새로 추가 (기본값 꼭 넣기!)
+    val naverBlogCount: Int? = null,
+    val naverScore: Double? = null,
+    val naverPopularityScore: Double? = null
 )
 
 /** 최종 추천 결과 */

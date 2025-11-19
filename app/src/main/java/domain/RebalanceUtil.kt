@@ -1,10 +1,9 @@
 package com.example.project_2.domain.model
 
 /**
- * 최종 노출 점수:
- * - GPT score(있으면 최우선)
- * - rating(보조 가중치)
- * - distance(가까울수록 약간 가산)
+ * ============================
+ *  공통 스코어 계산
+ * ============================
  */
 private fun Place.finalScore(): Double {
     val s = this.score ?: 0.0
@@ -16,14 +15,25 @@ private fun Place.finalScore(): Double {
 }
 
 /**
- * 카테고리별 최소 개수 보장 + 카테고리별 Top1 상단 고정 + 라운드로빈 분배
- *
- * @param candidates 카카오/GPT 통합 후보(중복 id 가능하면 알아서 distinct)
- * @param selectedCats 사용자가 선택한 카테고리들
- * @param minPerCat 카테고리 당 최소 보장 수 (기본 4)
- * @param perCatTop 상단 고정 개수(카테고리 당, 기본 1)
- * @param totalCap 최종 최대 개수(없으면 제한 없음)
- * @return Pair(상단 고정 리스트, 최종 정렬된 전체 리스트)
+ * 문자열 "광주 동명동, 광주 상무지구" → ["동명동", "상무지구"]
+ */
+fun extractNeighborhoodKeywords(regionText: String): List<String> {
+    return regionText
+        .split(',', '·', '/', ';')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .mapNotNull { token ->
+            // token: "광주 동명동"
+            val parts = token.split(" ")
+            if (parts.size >= 2) parts[1].trim() else null
+        }
+        .distinct()
+}
+
+/**
+ * ============================
+ *  1) 카테고리 리밸런스
+ * ============================
  */
 fun rebalanceByCategory(
     candidates: List<Place>,
@@ -33,32 +43,36 @@ fun rebalanceByCategory(
     totalCap: Int? = null
 ): Pair<List<Place>, List<Place>> {
 
-    // 0) 선택 카테고리만, id 중복 제거
     val filtered = candidates
         .filter { it.category in selectedCats }
         .distinctBy { it.id }
 
-    // 1) 카테고리별 점수 내림차순 정렬 큐
     val grouped = filtered
         .groupBy { it.category }
-        .mapValues { (_, list) -> list.sortedByDescending { it.finalScore() } }
+        .mapValues { (_, list) ->
+            list.sortedByDescending { it.finalScore() }
+        }
         .toMutableMap()
 
     val used = LinkedHashSet<String>()
     val topPicks = mutableListOf<Place>()
 
-    // 2) 카테고리별 Top n 상단 고정
+    // ------------------------------
+    // Top pick 확보
+    // ------------------------------
     for (cat in selectedCats) {
         val list = grouped[cat].orEmpty()
         val takeN = minOf(perCatTop, list.size)
-        repeat(takeN) { idx ->
-            val p = list[idx]
+        repeat(takeN) { i ->
+            val p = list[i]
             if (used.add(p.id)) topPicks += p
         }
         if (takeN > 0) grouped[cat] = list.drop(takeN)
     }
 
-    // 3) 1차 라운드로빈: 각 카테고리 최소 minPerCat 충족
+    // ------------------------------
+    // 최소 minPerCat 개수 확보 라운드로빈
+    // ------------------------------
     val body = mutableListOf<Place>()
     val perCatCount = mutableMapOf<Category, Int>().withDefault { 0 }
 
@@ -71,6 +85,7 @@ fun rebalanceByCategory(
             val q = grouped[cat]!!
             val p = q.first()
             grouped[cat] = q.drop(1)
+
             if (used.add(p.id)) {
                 body += p
                 perCatCount[cat] = perCatCount.getValue(cat) + 1
@@ -78,26 +93,85 @@ fun rebalanceByCategory(
         }
     }
 
-    // 4) 2차 채우기: 남은 항목을 점수순 + 가벼운 RR로 채움
+    // ------------------------------
+    // 잔여 채우기
+    // ------------------------------
     val remaining = buildList {
-        for ((cat, list) in grouped) addAll(list.map { cat to it })
+        for ((cat, list) in grouped) {
+            addAll(list.map { cat to it })
+        }
     }.sortedByDescending { it.second.finalScore() }
 
     var lastCat: Category? = body.lastOrNull()?.category ?: topPicks.lastOrNull()?.category
+
     for ((cat, p) in remaining) {
         if (totalCap != null && (topPicks.size + body.size) >= totalCap) break
         if (used.contains(p.id)) continue
-        if (lastCat == cat) continue   // 같은 카테고리 연속 배치 완화
+        if (lastCat == cat) continue
+
+        used.add(p.id)
         body += p
-        used += p.id
         lastCat = cat
     }
-    // 아직 자리가 남았으면 나머지도 채움
+
     for ((_, p) in remaining) {
         if (totalCap != null && (topPicks.size + body.size) >= totalCap) break
         if (used.add(p.id)) body += p
     }
 
-    val finalList = topPicks + body
-    return topPicks to finalList
+    return topPicks to (topPicks + body)
+}
+
+/**
+ * ============================
+ *  2) 동네 리밸런스
+ * ============================
+ */
+fun rebalanceByNeighborhood(
+    ordered: List<Place>,
+    regionText: String,
+    minPerNeighborhood: Int,
+    totalCap: Int
+): List<Place> {
+    if (ordered.isEmpty()) return emptyList()
+
+    val neighborhoods = extractNeighborhoodKeywords(regionText)
+    if (neighborhoods.isEmpty()) return ordered
+
+    val byArea = mutableMapOf<String, MutableList<Place>>()
+    val others = mutableListOf<Place>()
+
+    for (p in ordered) {
+        val addr = p.address ?: ""
+        val matched = neighborhoods.firstOrNull { kw ->
+            addr.contains(kw)
+        }
+        if (matched != null) {
+            byArea.getOrPut(matched) { mutableListOf() }.add(p)
+        } else {
+            others.add(p)
+        }
+    }
+
+    val picked = LinkedHashSet<Place>()
+
+    // ------------------------------
+    // 동네별 최소 개수 확보
+    // ------------------------------
+    for (kw in neighborhoods) {
+        val bucket = byArea[kw].orEmpty()
+        bucket.take(minPerNeighborhood).forEach {
+            if (picked.size < totalCap) picked.add(it)
+        }
+    }
+
+    // ------------------------------
+    // 남은 자리 기존 순으로 채우기
+    // ------------------------------
+    for (p in ordered) {
+        if (picked.size >= totalCap) break
+        picked.add(p)
+    }
+
+    return picked.toList()
 }

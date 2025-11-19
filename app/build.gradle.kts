@@ -54,6 +54,16 @@ android {
             name = "TMAP_API_KEY",
             value = "\"${localProps.getProperty("TMAP_API_KEY", "")}\""
         )
+        buildConfigField(
+            type = "String",
+            name = "NAVER_CLIENT_ID",
+            value = "\"${localProps.getProperty("NAVER_CLIENT_ID", "")}\""
+        )
+        buildConfigField(
+            type = "String",
+            name = "NAVER_CLIENT_SECRET",
+            value = "\"${localProps.getProperty("NAVER_CLIENT_SECRET", "")}\""
+        )
 
         vectorDrawables { useSupportLibrary = true }
     }
@@ -115,6 +125,9 @@ dependencies {
     // Google Play Services Location (for GPS location)
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
-    // Drag and Drop for Compose
+    // Drag & Drop for reordering lists (일정/루트 순서 변경용)
     implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
+
+    // Gson for JSON serialization
+    implementation("com.google.code.gson:gson:2.10.1")
 }

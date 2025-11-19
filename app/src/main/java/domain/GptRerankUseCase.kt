@@ -64,17 +64,55 @@ class GptRerankUseCase(
                 val cat = runCatching { safeToText(p.category) }.getOrElse { "-" }
                 val rating = runCatching { p.rating?.toString() ?: "-" }.getOrElse { "-" }
                 val dist = runCatching { p.distanceMeters?.toString() ?: "-" }.getOrElse { "-" }
-                appendLine("- origIndex=$idx, id=${p.id}, name=${p.name}, cat=$cat, rating=$rating, distM=$dist")
+
+                // ✅ 네이버 정보 문자열로 추가
+                val naverScore = runCatching {
+                    p.naverPopularityScore?.let { "%.3f".format(it) } ?: "-"
+                }.getOrElse { "-" }
+
+                val blogCnt = runCatching {
+                    p.naverBlogCount?.toString() ?: "-"
+                }.getOrElse { "-" }
+
+                appendLine(
+                    "- origIndex=$idx, id=${p.id}, name=${p.name}, " +
+                            "cat=$cat, rating=$rating, distM=$dist, " +
+                            "naverScore=$naverScore, naverBlogs=$blogCnt"
+                )
             }
         }
 
-        // ✅ 새로 추가된 "체인점 패널티 규칙"
+        // ✅ 세부 메모(꼭 가보고 싶은 가게/장소 등)
+        val extraNoteBlock = if (filter.extraNote.isNotBlank()) {
+            """
+- 사용자가 직접 남긴 메모:
+  "${filter.extraNote.trim()}"
+- 위 메모에 언급된 '꼭 가보고 싶은 장소/가게'가 후보 목록에 존재한다면
+  - 가능한 한 최종 추천 목록에 반드시 포함하고,
+  - 상위 순위에 배치하세요.
+- 후보 목록에 존재하지 않는 이름은 참고 정보로만 사용하고,
+  분위기·위치·가격대가 비슷한 다른 장소를 상위에 올리려고 노력하세요.
+            """.trimIndent()
+        } else {
+            "- 추가 메모 없음"
+        }
+
+        // ✅ 체인점 패널티 규칙
         val chainPenaltyRule = """
 - 프랜차이즈(체인점) 패널티: 아래 키워드가 이름에 포함되면 지역 특색이 부족하므로 **순위를 낮추세요.**
   (스타벅스, 메가커피, 이디야, 투썸플레이스, 빽다방, 할리스, 커피빈, 공차, 폴바셋, 엔젤리너스, 탐앤탐스, 더벤티 등)
 - 단, 해당 지점만의 독특한 가치(예: 한강뷰, 루프탑, 전시·공연 결합, 한정 메뉴 등)가 있다면 예외로 둘 수 있습니다.
   이 경우 반드시 그 구체적인 이유를 reason에 한 줄로 명시하세요.
-    """.trimIndent()
+        """.trimIndent()
+
+        // ✅ 네이버 점수 활용 규칙 추가
+        val naverRule = """
+- 각 후보에는 naverScore(네이버 블로그 검색 결과 기반 인기 점수)와
+  naverBlogs(관련 블로그 글 수)가 포함될 수 있습니다.
+- 이 값이 높을수록 실제로 많이 언급되고 인기 있는 장소이므로,
+  다른 조건(카테고리 적합성, 동행/예산/시간/날씨)이 비슷하다면
+  naverScore가 높은 장소를 더 상위에 배치하세요.
+        """.trimIndent()
 
         return """
 당신은 감성적인 여행 큐레이터입니다.
@@ -87,13 +125,18 @@ class GptRerankUseCase(
 - 동행: $companion
 - 소요시간: $duration
 - $budget
+
 [날씨]
 $weatherText
 
+[사용자 추가 메모]
+$extraNoteBlock
+
 [평가 기준]
-- 현지인의 시선에서 '서울 여행 중 방문할 만한 특별한 장소'를 우선합니다.
+- 현지인의 시선에서 '여행 중 방문할 만한 특별한 장소'를 우선합니다.
 - 지역 고유성, 희소성, 리뷰 감성, 날씨 적합성(실내/실외), 동행/체류시간/예산 등을 종합 고려합니다.
 $chainPenaltyRule
+$naverRule
 - 같은 유형이 몰리면 다양성을 확보하세요.
 - reason은 한국어 한 문장(20~80자), 공백/기호만 금지.
 - 모든 후보를 빠짐없이 한 번씩만 포함하고, id는 반드시 그대로 사용하세요.
@@ -223,38 +266,33 @@ $candidatesText
         }
 
         // 4) 점수 부여
-        //    - GPT score가 있으면 그대로 사용
-        //    - 없으면 "현재 finalOrdered의 순서"를 점수로 환산해 부여 (앞일수록 큰 점수)
-        //      → 이렇게 해야 rebalance 단계에서 score가 우선 반영되어 GPT 순서가 유지됨
         val scoreFromGpt: Map<String, Double> = buildMap {
-            ranked.forEachIndexed { idx, rp ->
+            ranked.forEachIndexed { _, rp ->
                 val realId = resolveRealId(rp.id) ?: return@forEachIndexed
-                // Int.MIN_VALUE면 GPT가 score를 안 준 것 → 점수 미지정
                 if (rp.score != Int.MIN_VALUE) put(realId, rp.score.toDouble())
             }
         }
 
-        val fallbackBase = 100.0  // 앞에 있을수록 100, 99, 98 ... 식으로
+        val fallbackBase = 100.0  // 앞에 있을수록 100, 99, 98 ...
         val ensuredScored = finalOrdered.mapIndexed { index, p ->
             val s = scoreFromGpt[p.id] ?: (fallbackBase - index)
             p.copy(score = s)
         }
 
-        // 5) "AI 사용" 판정: ranked가 비어있지 않고, 순서 변경 or 이유 제공이 있을 때
+        // 5) "AI 사용" 판정
         val orderChanged = !sameOrder(ensuredScored, capped)
         val anyReason = reasonsMap.isNotEmpty()
         val aiUsed = ranked.isNotEmpty() && (orderChanged || anyReason)
 
-        // 6) TOP3 id 세트 산출(사용했을 때만) — GPT 순서/우선순위 보정 결과 기준
+        // 6) TOP3 id 세트 산출
         val top3 = if (aiUsed) ensuredScored.take(3).map { it.id }.toSet() else emptySet()
 
-        // ⚠️ 여기서는 "정렬을 다시 하지 않는다".
-        //    → 순서 자체는 GPT가 만든 순서를 최대한 유지(누락 보강분은 뒤로),
-        //      대신 score에 순서를 녹였으므로 이후 rebalance 단계(finalScore)에서
-        //      카테고리 최소/Top 보장을 하면서도 GPT 우선순위를 보존할 수 있다.
-        Log.d(TAG, "✅ ensured scores sample: " + ensuredScored.take(5).joinToString {
-            "${it.name}:${"%.1f".format(it.score ?: 0.0)}"
-        })
+        Log.d(
+            TAG,
+            "✅ ensured scores sample: " + ensuredScored.take(5).joinToString {
+                "${it.name}:${"%.1f".format(it.score ?: 0.0)}"
+            }
+        )
 
         return RerankOutput(ensuredScored, reasonsMap, top3)
     }
