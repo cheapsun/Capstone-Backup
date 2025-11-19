@@ -11,6 +11,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -208,6 +210,54 @@ fun MainScreen(
                             }
                         }
                     }
+                }
+            }
+
+            // 인원수
+            item {
+                SectionCard(title = "인원수") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { vm.decreasePeople() },
+                            enabled = ui.filter.numberOfPeople > 1
+                        ) {
+                            Icon(Icons.Default.Remove, contentDescription = "감소")
+                        }
+                        Text(
+                            text = "${ui.filter.numberOfPeople}명",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
+                        IconButton(
+                            onClick = { vm.increasePeople() },
+                            enabled = ui.filter.numberOfPeople < 10
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "증가")
+                        }
+                    }
+                }
+            }
+
+            // 필수 방문 장소
+            item {
+                SectionCard(title = "필수 방문 장소") {
+                    OutlinedTextField(
+                        value = ui.filter.mandatoryPlace,
+                        onValueChange = vm::setMandatoryPlace,
+                        placeholder = {
+                            Text("예: 해운대, 광안리")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    AssistiveHint("꼭 가고 싶은 장소가 있다면 입력해주세요. 추천 결과에 자동으로 포함됩니다.")
                 }
             }
 
